@@ -1,0 +1,347 @@
+# Round — Implementation Plan
+
+## Context
+
+Round is an AI-facilitated Scripture reading circle app built for the "Scripture in New Frontiers" competition (Gloo AI + YouVersion, July 6–31, 2026). This plan turns the requirements in `round-implementation-brief.md` into an ordered, testable build sequence. Every step adds one observable piece of functionality, ends in a verifiable state, and builds only on earlier steps. The repo currently contains only a README and the brief — this is a greenfield build.
+
+Non-negotiable constraints threaded through every step: all AI calls go through Gloo (never OpenAI/Anthropic directly); Bible text comes only from YouVersion via version ID and is never translated; original message content is never overwritten (translations are additive); the Escalation Agent runs on every reflection before any other processing; no pace/streak comparison between members; Health Agent decisions are logged and explained; Tier 2 agent stubs exist from the start.
+
+---
+
+# Decisions
+
+## Infrastructure
+
+**Hosting: Vercel — confirmed.** First-party Next.js support, preview deploys per PR, built-in Cron, environment-variable management per environment. Nothing in the requirements needs long-lived processes, so serverless is the lowest-friction fit for a 3.5-week competition build.
+
+**Production database: Vercel Postgres (Neon) — confirmed.** Provisioned from the Vercel dashboard, connection string injected automatically into the Vercel environment, serverless-friendly HTTP driver, and it is plain PostgreSQL so local parity is trivial.
+
+**Local database: PostgreSQL in Docker — confirmed.** Run the same PostgreSQL major version Neon uses (16) via a `docker-compose.yml`, so schema and query behaviour are identical across environments. One command (`docker compose up`) brings up the full local dependency set (Postgres + Mailpit, below).
+
+**Framework: Next.js (App Router) — confirmed.** SSR for the mobile-first UI, API route handlers for all agent endpoints and cron targets, one deployable unit on Vercel.
+
+**Auth: NextAuth.js (Auth.js v5) with a custom YouVersion OAuth 2.0 provider — confirmed.** YouVersion is not a built-in provider, but NextAuth supports custom OAuth provider definitions cleanly; it handles session cookies, token storage, and CSRF for free. Instant Access deliberately does **not** go through NextAuth — it is a signed anonymous session token held in browser `sessionStorage` with no database user row (see Decisions → Instant Access below), matching the brief's "no database row" requirement.
+
+**Email: Resend — committed.** Simple HTTP API, plain-text email support (the brief requires plain text, no tracking pixels), generous free tier, first-class Vercel integration.
+
+**ORM: Drizzle ORM with drizzle-kit migrations — chosen.** Reasons over Prisma: SQL-first schema that maps directly onto Postgres features (unique constraints drive our idempotency strategy), no heavyweight generated client (faster serverless cold starts on Vercel), and native support for Neon's serverless HTTP driver. Raw SQL was rejected because the schema has ~15 related tables and typed query building will prevent whole classes of bugs under time pressure.
+
+**Local email testing: Mailpit (in Docker Compose).** The email layer is a thin abstraction with two drivers: Resend (production, selected via env var) and SMTP via nodemailer pointed at Mailpit (local). Developers open the Mailpit web UI at `localhost:8025` to inspect every outgoing message. No real email can ever be sent from local dev.
+
+**Deployment pipeline: GitHub → Vercel, trunk-based.** Repo hosted on GitHub. Feature branches → pull request → every PR gets an automatic Vercel preview deploy (pointing at a Neon branch database, not production). Merge to `main` triggers the production deploy. No manual deploy steps; `main` is always deployable.
+
+**Migration strategy: committed SQL migrations, applied during the production build step.** drizzle-kit generates versioned SQL migration files that are committed with the code that needs them. The Vercel build command runs `drizzle-kit migrate` against the production database *before* the new build is promoted to serve traffic. To keep the brief old-code/new-schema overlap window safe, migrations follow expand/contract discipline: additive changes (new tables/columns, nullable first) ship with the feature; destructive changes (drops, renames) ship only in a later release after no code references the old shape. Locally, the same command runs against the Docker Postgres.
+
+## Agent Scheduling
+
+**Mechanism: Vercel Cron invoking secured Next.js API routes.** Each scheduled agent (Facilitator+Summary daily per circle, Reminder daily per user, Health every 12 hours per circle, demo-circle refresh daily, Memory weekly — stub only) is an ordinary HTTP route handler. `vercel.json` declares the cron schedule; Vercel calls the route with an `Authorization: Bearer ${CRON_SECRET}` header which the handler verifies. No external queue or worker infrastructure — every agent run fits comfortably inside a serverless function invocation, and judges can read the entire scheduling story in one config file.
+
+**Local development:** Vercel Cron does not run locally, so the same routes are triggered manually from a dev-only "Agent Console" page (gated to non-production environments) with a button per scheduled agent, plus they can be hit with `curl`. Because the cron target is the identical route handler, local testing exercises exactly the production code path.
+
+**Idempotency:** an `agent_runs` table with a **unique constraint on `(agent_name, target_id, period_key)`** — e.g. `(facilitator, circle_42, 2026-07-12)` or `(reminder, user_7, 2026-07-12)`. Every scheduled agent's first action is an `INSERT` of its run row; a unique-violation means the work was already done and the agent exits without calling Gloo. Output tables carry matching unique constraints as a second fence (digests unique per circle+day, reminders unique per user+type+day). Re-running any cron endpoint any number of times can never produce duplicate digests, reminders, or notifications — verified explicitly in Step 23.
+
+## Product and UX
+
+**Circle matching fallback: closest available match with explanation; if no open circle exists at all, create a new one immediately.** Gloo compares the user's onboarding profile against all open (forming/active, size < 5) circles and returns the best match plus a short explanation shown to the user — even when the match is imperfect, the explanation frames it honestly ("closest fit: this circle is also reading Psalms, though in a different life season"). Only when there are zero joinable circles does the app create a fresh circle in `forming` state and tell the user they're a founding member. Queuing (option a) was rejected: a user left waiting is a dead end in a demo and in real life.
+
+**Real-time vs polling: polling.** The circle thread refetches every **10 seconds** while visible, pauses when the tab is hidden (Page Visibility API), and refetches immediately after the user posts. Reading circles are a slow, reflective medium — sub-second delivery adds no product value, and WebSockets don't fit Vercel serverless without adding a third-party service. Polling also doubles as the delivery mechanism for asynchronously completed translations (below).
+
+**Reading plan reference validation: 2 regeneration retries per failed reference, then substitution from a curated fallback pool.** Every Gloo-generated reference is validated by fetching it from the YouVersion Passages API before the plan is saved. On failure, Gloo is asked to regenerate *only the failing day*, with the invalid reference and the error included in the prompt — up to 2 retries. If still invalid, the day is filled from a small curated pool of always-valid passages tagged by topic, and the plan preview marks that day as "adjusted." If generation fails wholesale (Gloo error, majority of references invalid), the user sees a friendly failure message and is offered the pre-defined plan library — they are never left without a path forward.
+
+**YouVersion version ID catalogue: fetched per language from the Bible Versions API, cached in a database table with a 24-hour TTL, lazily revalidated.** The version picker renders the curated short-list from the brief instantly (NIV/KJV/ESV/NLT/MSG; NVI/RVR1960/LBLA; NVI-PT/ARC), then fills in the full list when the cached/fetched catalogue arrives. Defaults when the user hasn't chosen: **English → NIV, Spanish → NVI, Portuguese → NVI-PT**; any other language → the first version the Bible Versions API returns for that language. If a stored version ID stops resolving, the passage fetch falls back to the language default, shows the notice required by the brief, and does *not* silently overwrite the user's saved preference.
+
+**Language detection: a single lightweight Gloo Completions call per message, with the author's profile language as fallback.** The call returns an ISO language code and a confidence level. On low confidence or call failure, the author's own preferred language is assumed as the source. The failure mode is safe by design: the translation prompt instructs Gloo to return the text unchanged if it is already in the target language, so a wrong detection can cost one wasted call but never a wrong display. Gloo is chosen over a local library because short devotional messages defeat n-gram detectors, and it keeps every AI touch inside the one permitted gateway.
+
+**Translation timing: asynchronous.** The author's message is stored and appears in the thread immediately. Translation for each distinct reader language runs right after the post is persisted (in the same request lifecycle via `waitUntil`, so the author isn't blocked). Readers whose language differs from the source see the original text with a small "Translating…" badge; the next 10-second poll (or sooner) swaps in the cached translation with the "Translated by Round" label and the "Show original" toggle. Rationale: never block or lose a user's message because an AI call is slow, and the polling infrastructure already delivers the swap for free.
+
+**Escalation resource list: a version-controlled config file in the repo** (a typed TS/JSON module), keyed by region with a default fallback, containing at minimum US 988 Suicide & Crisis Lifeline and UK Samaritans 116 123. A config file rather than a database table because: it must work identically for Instant Access users and even if the database hiccups, changes go through PR review (appropriate gravity for crisis resources), and it deploys atomically with the code that renders it.
+
+**Escalation handling of flagged reflections (interpretation decision):** per the brief, "the flagged content is never shared with the circle." A flagged reflection is therefore saved as private to its author, is **not** posted to the circle thread, and is **excluded from Facilitator digest input**. The author sees their reflection normally plus the quiet support card; other members see nothing at all. Only the reflection's ID (never its content) is written to the audit log.
+
+**Instant Access demo circle freshness: dynamically refreshed daily.** A daily cron job re-dates the demo circle's seeded reflections to look current and regenerates the digest, lesson summary, and conversation starters via **real Gloo calls** — so the demo circle always shows today's date and doubles as a standing live integration test of the agent pipeline. Anonymous visitors' reflections are stored as rows tagged with their anonymous session ID (necessary so they appear in the thread and pass through the Escalation Agent) and are pruned by the same daily job — honouring "no data persisted between sessions" while keeping the current session fully functional.
+
+---
+
+# Step-by-Step Plan
+
+## Phase 0 — Infrastructure Foundation
+
+### Step 1 — Scaffold and production deploy pipeline
+- **What gets built:** A new Next.js (App Router) project pushed to a GitHub repo, connected to a Vercel project. A minimal home page ("Round" placeholder). Branch protection on `main`; PR preview deploys enabled. Environment variable placeholders created in Vercel (Gloo API key, YouVersion API key, OAuth client credentials, `CRON_SECRET`, database URL, Resend key) and a documented `.env.example` locally.
+- **Why this step comes here:** Nothing else can be verified end-to-end until code reaches production automatically. Proving the pipeline first means every later step can be tested in the real environment, not just locally.
+- **Touches:** Repo, Vercel project, CI/deploy configuration.
+- **How to test it:** Push a trivial change to a feature branch, open a PR, confirm a preview URL is generated and renders the page. Merge to `main`, then open the production URL in a browser and see the placeholder page with the change.
+- **Definition of done:** A merge to `main` automatically produces a working production deployment at the public URL with no manual steps.
+
+### Step 2 — Databases in both environments, ORM, and migrations
+- **What gets built:** Vercel Postgres (Neon) provisioned and linked to the Vercel project. Local `docker-compose.yml` running PostgreSQL 16 and Mailpit. Drizzle ORM configured with the Neon HTTP driver (production) and node-postgres (local). A first drizzle-kit migration creating a minimal `app_meta` table, applied in both environments; the production build command now runs migrations before promotion. A `/api/health` route that performs a database round-trip and reports status.
+- **Why this step comes here:** Every feature depends on the database, and the migration path must be proven before the schema grows. Depends on Step 1's deploy pipeline.
+- **Touches:** Database (local + production), ORM configuration, build pipeline, one API route.
+- **How to test it:** Locally: `docker compose up`, run migrations, `curl localhost:3000/api/health` returns `{ ok: true }` with a database timestamp. Then merge and `curl` the production `/api/health` — same result, proving production migrations ran during the build.
+- **Definition of done:** `/api/health` returns a successful database round-trip in both local dev and production, with the schema applied via committed migrations in both.
+
+## Phase 1 — Live API Clients and Agent Backbone
+
+### Step 3 — YouVersion API client with a live passage fetch
+- **What gets built:** A server-side YouVersion client module handling authentication headers, the Passages API (fetch by reference + version ID), and the Bible Versions API (list versions by language), with typed responses and clear error surfaces. Two dev-only test routes: one fetching a known passage (e.g. John 3:16, NIV version ID) live, one listing Spanish Bible versions live.
+- **Why this step comes here:** The brief demands real API calls from step one — any credential, quota, or response-shape surprise must surface now, before features are built on assumptions. Depends on Step 1 (env vars in place).
+- **Touches:** YouVersion Passages API, YouVersion Bible Versions API, server module, dev API routes.
+- **How to test it:** `curl` the dev passage route locally and in production: response contains the actual verse text and the version abbreviation. `curl` the versions route with `language=es`: response lists real Spanish versions including NVI with numeric version IDs.
+- **Definition of done:** Live YouVersion passage text and a live version catalogue are returned through the app's own client in both environments using real credentials.
+
+### Step 4 — Gloo API client with a live completion and agent output logging
+- **What gets built:** A server-side Gloo AI Studio client module for Completions V2 (and a placeholder method for Grounded Completions), with retry-on-transient-error handling. An `agent_logs` table recording agent name, timestamp, model used, and a truncated output reference for **every** Gloo call — the brief requires all agent outputs logged. A dev-only route that sends a fixed prompt through the client and returns the completion.
+- **Why this step comes here:** Every agent in the system flows through this client; its logging discipline must exist before the first agent does. Depends on Steps 1–2.
+- **Touches:** Gloo Completions V2 API, server module, database (`agent_logs`), dev API route.
+- **How to test it:** `curl` the dev route locally and in production; receive a real Gloo completion. Query `agent_logs` (or view via the dev console added in Step 5) and see a row with agent name, timestamp, and model for that call.
+- **Definition of done:** A live Gloo completion round-trips through the shared client in both environments, and the call is recorded in `agent_logs`.
+
+### Step 5 — Agent framework and Tier 2/3 stubs
+- **What gets built:** A thin agent framework: each agent is a module with a name, its own system prompt, a typed input/output contract, and a `run()` entry point that calls the shared Gloo client (which logs automatically). Registered agents: PlanBuilder, PreReading, PostReading, Facilitator, Summary, Prayer, Reminder, Escalation, Translation — as empty shells for now — plus **functioning no-op stubs for Context, Health, Flashcard, and Memory** that accept their defined inputs and return an explicit "not implemented" result. A dev-only "Agent Console" page (non-production only) listing all agents with a trigger button each — this page later becomes the local stand-in for Vercel Cron.
+- **Why this step comes here:** The brief mandates Tier 2 stubs exist from the start so later implementation needs no structural change. Creating the framework before any real agent guarantees every agent is built to one shape. Depends on Step 4.
+- **Touches:** Agent modules (all 13), Gloo client, dev UI page.
+- **How to test it:** Open the Agent Console locally; all 13 agents are listed. Trigger the Health stub: it returns a structured "not implemented" response and an `agent_logs` row is written. Trigger a shell agent (e.g. Prayer with a dummy input): a real Gloo call executes and returns text.
+- **Definition of done:** All 13 agent modules exist with defined interfaces, the four Tier 2/3 stubs run as confirmed no-ops, and every invocation is logged.
+
+## Phase 2 — Sessions: OAuth and Instant Access
+
+### Step 6 — Sign In with YouVersion (OAuth)
+- **What gets built:** NextAuth.js with a custom YouVersion OAuth 2.0 provider. Successful sign-in creates or finds a `users` row and establishes a session. A minimal signed-in home state showing the user's YouVersion display name and a sign-out action. The `users` table is created with language and Bible-version columns already present (nullable until onboarding) — multilingual is in the data layer from day one.
+- **Why this step comes here:** Path A's entire experience hangs off this identity; onboarding, highlights, and circles all need a user row. Depends on Steps 1–2.
+- **Touches:** NextAuth configuration, YouVersion OAuth, database (`users`, auth tables), sign-in UI.
+- **How to test it:** Click "Sign in with YouVersion" locally, complete the real OAuth flow against YouVersion, land back in the app showing your YouVersion name. Verify a `users` row exists. Sign out, sign back in — same row, no duplicate. Repeat once on production.
+- **Definition of done:** A real YouVersion account can sign in and out in both environments, producing exactly one persistent user row.
+
+### Step 7 — Highlight import (opt-in)
+- **What gets built:** During/after OAuth, a clearly worded permission step explaining exactly what is imported (existing highlights) and why (personalising reading prompts) — per the brief's opt-in constraint. On consent, the User Highlights API is called and highlights are stored (reference, version ID, text snippet, date) linked to the user. A profile screen section shows imported highlight count and lets the user revoke/delete them.
+- **Why this step comes here:** PreReading (Step 15) and PostReading (Step 20) prompts are personalised with highlight history; importing now means those agents get real data. Depends on Step 6.
+- **Touches:** YouVersion User Highlights API, OAuth scopes/consent UI, database (`highlights`), profile UI.
+- **How to test it:** Sign in with a YouVersion account that has highlights, grant permission on the consent screen, then open the profile and see the imported highlight count and sample entries. Sign in with permission declined: no highlights stored, app fully usable.
+- **Definition of done:** Highlights import only after explicit informed consent, are stored per user, and declining leaves the app fully functional.
+
+### Step 8 — Instant Access session (Path B entry)
+- **What gets built:** A one-tap "Try Round instantly" entry on the landing page. It mints a signed anonymous session token (no database user row) stored in browser `sessionStorage`, assigns an anonymous display name ("Reader #n" from an atomic counter), and applies defaults: English, NIV, and a default reading plan placeholder. All server routes gain a unified session resolver that returns either an authenticated user or an anonymous session — every subsequent feature is built against this abstraction so Instant Access is first-class, not bolted on. An "Upgrade" affordance ("Save your progress — sign in with YouVersion") appears persistently for anonymous sessions.
+- **Why this step comes here:** The brief insists Path B is not an afterthought. Building the anonymous session abstraction *before* the feature steps means every feature from here on is implemented once for both paths. Depends on Steps 1–2; parallel to Step 6's session model.
+- **Touches:** Session middleware/resolver, landing page UI, `sessionStorage`, anonymous naming.
+- **How to test it:** Open the production URL in a private/incognito window, tap "Try Round instantly" — land inside the app with no form, seeing an assigned "Reader #n" identity and default language/version. Close the window, reopen: session gone, fresh entry works again. Verify no `users` row was created.
+- **Definition of done:** A visitor reaches the app interior in one tap with no account, holds a working anonymous session for the browser session only, and no database user row exists for them.
+
+## Phase 3 — Onboarding and Reading Plans
+
+### Step 9 — Language and Bible version selection
+- **What gets built:** The onboarding screen (and a settings screen for later changes) for choosing preferred language and Bible version. A `bible_versions` catalogue table populated from the Bible Versions API per language, cached with a 24-hour TTL and lazy revalidation. The picker renders the curated short-lists instantly (per the brief: NIV/KJV/ESV/NLT/MSG, NVI/RVR1960/LBLA, NVI-PT/ARC) and fills in the full API list when loaded. Selection is stored on the `users` row for Path A and in the anonymous session for Path B. Language defaults applied when unset: English→NIV, Spanish→NVI, Portuguese→NVI-PT, other→first API result.
+- **Why this step comes here:** Language + version ID drive every passage fetch and every translation target downstream — the brief requires this in the data layer before any dependent feature. Depends on Steps 3, 6, 8.
+- **Touches:** YouVersion Bible Versions API, database (`bible_versions`, `users`), onboarding UI, settings UI, anonymous session state.
+- **How to test it:** In onboarding, choose Spanish: the picker shows NVI/RVR1960/LBLA immediately, then the fuller live list. Select NVI, finish, reload — the choice persists (database row for signed-in; sessionStorage for anonymous). Change language to Portuguese in settings: version list swaps to Portuguese versions.
+- **Definition of done:** Both session types can select and persist a language and version ID, with the picker fed by the live cached catalogue and curated defaults.
+
+### Step 10 — Onboarding goals and profile questions
+- **What gets built:** The remaining onboarding questions: what do you want to learn, why do you want to read the Bible, life season, available time per day, topics of interest. Answers stored on the user profile (Path A) or session (Path B, optional/skippable with defaults per the brief). A profile screen displays and allows editing of the answers.
+- **Why this step comes here:** These answers feed PlanBuilder (Step 12), circle matching (Step 21), the icebreaker (Step 22), and prompt personalisation — they must exist before any of those. Depends on Step 9 (single onboarding flow).
+- **Touches:** Database (`users`/profile), onboarding UI, profile UI.
+- **How to test it:** Complete onboarding as a signed-in user with distinctive answers; open the profile page and see them verbatim; edit one and see it persist after reload. As an anonymous user, skip the questions entirely and still land in the app with defaults.
+- **Definition of done:** Onboarding answers persist and are editable for signed-in users, and are optional-with-defaults for Instant Access users.
+
+### Step 11 — Pre-defined reading plans, selection, and plan view
+- **What gets built:** The reading plan schema: a plan is a structured list of day-by-day passage references (no Bible text ever stored — references only). A seed migration inserts the starter library (Psalms in 30 days, Gospel of Mark, Ruth). Onboarding's plan step lets the user browse and select a plan; a plan view shows the day list with the user's current day and per-day references. User plan progress (current day, days completed) is stored privately — never exposed to other members, per the no-comparison constraint.
+- **Why this step comes here:** The plan is the spine of the daily loop — passage view, prompts, digests, and reminders all key off "today's reference." Pre-defined plans are pure data, so they land before AI generation. Depends on Steps 2, 9–10.
+- **Touches:** Database (`plans`, `plan_days`, `user_plan_progress`), seed migration, onboarding UI, plan view UI.
+- **How to test it:** In onboarding, pick "Psalms in 30 days"; the plan view shows 30 days with correct Psalm references and Day 1 marked current. Verify by database inspection that only references are stored, never passage text. Anonymous user selects a plan and sees the same view.
+- **Definition of done:** A user on either path can select a seeded plan and see their day-by-day reference list with private progress tracking.
+
+### Step 12 — PlanBuilder Agent: AI-generated plans with YouVersion validation
+- **What gets built:** The "create my own plan" onboarding path. PlanBuilder sends onboarding goals, time per day, and topics to Gloo and receives a structured day-by-day plan. **Every reference is validated by a live YouVersion Passages fetch before saving.** Failed references trigger up to 2 single-day regenerations (with the failure fed back to Gloo), then substitution from a curated topic-tagged fallback pool with the day marked "adjusted" in the preview. Generated plans are saved in the identical structure as seeded plans. Total generation failure offers the pre-defined library instead.
+- **Why this step comes here:** Requires the plan schema (Step 11), Gloo client (Step 4), and YouVersion client (Step 3). Landing it now means everything downstream works identically for both plan origins.
+- **Touches:** PlanBuilder agent, Gloo Completions V2, YouVersion Passages API (validation), database (same plan tables), onboarding UI.
+- **How to test it:** Choose "create my own plan" with goals like "learn about forgiveness, 10 minutes a day, 2 weeks"; receive a 14-day plan preview; spot-check three generated references by opening them in the passage view (Step 13, or via the Step 3 dev route) — all resolve. Check `agent_logs` for the PlanBuilder run. Force a validation failure (temporarily inject a bogus reference in dev) and observe the retry-then-fallback path produce a valid plan.
+- **Definition of done:** An AI-generated plan saves only after every reference has passed live YouVersion validation, using the same schema as pre-defined plans.
+
+## Phase 4 — The Reading Experience
+
+### Step 13 — Passage view
+- **What gets built:** The core reading screen for "today's passage": text fetched live from the YouVersion Passages API using the session's version ID; the version abbreviation shown persistently next to the reference; a one-tap version switcher (fed by Step 9's catalogue); the fallback behaviour — if the passage is unavailable in the chosen version, fetch the language-default version and show a notice without overwriting the user's preference; and an "Open in Bible App" deep-link button on every passage view.
+- **Why this step comes here:** First screen where a user actually reads Scripture; everything before it exists to parameterise this fetch. Depends on Steps 3, 9, 11.
+- **Touches:** YouVersion Passages API, YouVersion Deep Links, passage UI, version picker component.
+- **How to test it:** As a Spanish/NVI user, open Day 1: the passage renders in Spanish with "NVI" beside the reference. Tap the version badge, switch to RVR1960: text re-fetches in one tap. Tap "Open in Bible App": the deep link opens the correct passage in YouVersion. Point a test user at a version lacking the passage: the language-default version renders with the fallback notice.
+- **Definition of done:** Any user on either path reads today's live-fetched passage in their chosen version, can switch versions in one tap, and can deep-link to the Bible App.
+
+### Step 14 — In-app highlighting and reading completion
+- **What gets built:** Text selection in the passage view creates a session highlight, stored with the reference and **the version ID it was made in** (per the brief). A "Finished reading" action marks the plan day complete and advances private progress. Signed-in users' highlights persist; anonymous users' highlights live in session storage only. No progress or highlight information is ever visible to other members.
+- **Why this step comes here:** Session highlights feed PostReading starters (Step 20); completion state feeds the Reminder Agent (Step 29) and gates post-reading UI. Depends on Step 13.
+- **Touches:** Passage UI, database (`highlights`, `user_plan_progress`), anonymous session state.
+- **How to test it:** Highlight a phrase in NVI, then switch the passage to RVR1960 and highlight another; inspect stored highlights — each carries its own version ID. Tap "Finished reading": the plan view shows Day 1 complete and Day 2 current. Confirm nothing about this progress appears anywhere another user could see.
+- **Definition of done:** Highlights persist with their version ID, day completion advances private progress, and both work on both session paths.
+
+### Step 15 — PreReading Agent: pre-reading prompts
+- **What gets built:** When a user opens today's passage, the PreReading agent generates 2–3 short personal prompts via Gloo, informed by the passage text (fetched from YouVersion and passed as context), the user's onboarding goals, and relevant imported highlights. Displayed in a collapsible card above the passage, clearly personal (never shared). Generated in the user's preferred language directly. Cached per user+day so reopening doesn't re-call Gloo.
+- **Why this step comes here:** First personalised AI feature in the reading loop; needs passage view (13), goals (10), and highlights (7). Its output is also referenced by PostReading later.
+- **Touches:** PreReading agent, Gloo Completions V2, YouVersion Passages API (context), passage UI, cache table.
+- **How to test it:** As a signed-in user whose goal mentions "forgiveness," open a passage: 2–3 prompts appear above the text, in the user's language, plausibly connected to both the passage and the stated goal. Collapse them; reload — prompts reappear identically (cache hit, confirmed by no new `agent_logs` row). As an anonymous user, prompts still generate live using session defaults.
+- **Definition of done:** Personalised pre-reading prompts render collapsibly above the passage for both paths, generated once per user per day.
+
+## Phase 5 — Circles
+
+### Step 16 — Circle creation, browsing, and joining
+- **What gets built:** Circle entity with states (forming → active → stalled → archived), size limits (min 3, max 5), and an attached reading plan. Users can create a circle (choosing a plan), browse open circles (name, plan, member count — never member progress), and join one. A circle becomes `active` at 3 members; joining is blocked at 5. Members list shows display names only.
+- **Why this step comes here:** The social container for everything in Phases 5–6. Depends on plans (Step 11) and sessions (Steps 6/8).
+- **Touches:** Database (`circles`, `circle_members`), circle browse/create/join UI.
+- **How to test it:** With three test accounts: account A creates a circle on the Mark plan (state `forming`); accounts B and C browse, find it, join; on C's join the state flips to `active`. Add two more members, then a sixth attempt is refused with a clear message. Confirm the browse view exposes no per-member progress anywhere.
+- **Definition of done:** Circles can be created, discovered, and joined with size and state rules enforced, showing no inter-member comparison data.
+
+### Step 17 — Circle thread with polling
+- **What gets built:** The circle thread: members post text messages, rendered chronologically with author display names and timestamps. The thread refetches every 10 seconds while visible, pauses when the tab is hidden, and refetches immediately after posting. Message schema is designed for what's coming: an immutable original body + source-language field, with a separate additive `message_translations` table (empty for now) — originals are never modified, per the brief.
+- **Why this step comes here:** The thread is the surface for reflections, starters, digests, and translations. The polling mechanism built here also delivers async translation swaps later. Depends on Step 16.
+- **Touches:** Database (`messages`, `message_translations` shell), thread UI, polling logic.
+- **How to test it:** Open the same circle in two browsers as two members. Post from one; within 10 seconds it appears in the other without a manual refresh. Background the second tab and verify (network inspector) polling stops; foreground it and polling resumes.
+- **Definition of done:** Circle members exchange messages that propagate to other open sessions within one polling interval, with originals stored immutably.
+
+### Step 18 — Escalation Agent (standalone, before any reflection intake exists)
+- **What gets built:** The complete Escalation Agent: a Gloo call with a dedicated system prompt that classifies text for crisis signals (suicidal ideation, self-harm, acute crisis, complete hopelessness); the version-controlled crisis resource config file (US 988, UK Samaritans 116 123 minimum, region-keyed with default); the quiet, non-alarming support card UI component shown only to the affected user, offering connection to a trusted person or the listed resources; and the audit log that records **only the reflection reference, never content**. A dev-only test route (non-production) allows submitting arbitrary text to the classifier to verify behaviour.
+- **Why this step comes here:** The brief is absolute: the product must not accept user reflections without this running first. Building and testing it standalone *before* Step 19 makes that ordering structurally guaranteed. Depends on Steps 4–5.
+- **Touches:** Escalation agent, Gloo Completions V2, crisis resource config file, support card component, audit log table, dev test route.
+- **How to test it:** Via the dev route: submit a benign reflection — no flag. Submit test text with clear crisis language — flagged, and the support card component renders with correct US/UK resources. Inspect the audit log: contains a reference ID and timestamp only, no message content anywhere.
+- **Definition of done:** The Escalation Agent correctly classifies test inputs, renders the private support card with the hardcoded resources, and logs references only.
+
+### Step 19 — Reflection submission through the Escalation gate
+- **What gets built:** The daily reflection flow: after reading, a member writes a reflection for the circle. The submission pipeline is hard-wired so the **Escalation Agent runs first, synchronously, before any other processing** — before the reflection is posted to the thread, before translation, before anything. Unflagged reflections post to the thread as a distinct "reflection" message type tied to the plan day. Flagged reflections are saved privately to the author (never posted, excluded from future digest input, per the Decisions section), and the author sees the support card.
+- **Why this step comes here:** Inseparable from Step 18 by requirement — reflections may not exist before the gate does. Depends on Steps 17–18.
+- **Touches:** Reflection UI, submission pipeline, Escalation agent, database (`reflections`, messages), thread UI.
+- **How to test it:** Submit a normal reflection: it appears in the circle thread tagged to today's passage, and `agent_logs` shows the Escalation run *preceding* the post. Submit a reflection containing the crisis test phrasing: the support card appears to the author; a second member's view of the thread shows **no trace** of that reflection or any escalation signal.
+- **Definition of done:** Every reflection passes through the Escalation Agent before any other processing, flagged content stays private to its author, and unflagged reflections appear in the thread.
+
+### Step 20 — PostReading Agent: conversation starters in the thread
+- **What gets built:** When a user finishes reading (Step 14's completion action), the PostReading agent generates 2–3 discussion questions via Gloo, grounded in the specific passage, the user's session highlights, and the pre-reading prompts they were shown. Posted to the circle thread attributed to **"Round"** as a system message type (visually distinct from member messages); members can reply to them. Idempotent per user+day.
+- **Why this step comes here:** Needs completion (14), pre-reading prompts (15), and the thread (17). Depends on Step 19's message-type groundwork for system-attributed posts.
+- **Touches:** PostReading agent, Gloo Completions V2, thread UI (system message rendering), database.
+- **How to test it:** Highlight a striking phrase, tap "Finished reading": within moments 2–3 questions attributed to "Round" appear in the circle thread, at least one visibly connected to the highlighted phrase. Another member replies to one. Complete the same day again — no duplicate starters.
+- **Definition of done:** Finishing a reading posts passage-grounded, highlight-aware starters to the thread as "Round," exactly once per user per day.
+
+### Step 21 — AI circle matching with fallback
+- **What gets built:** The third onboarding path into a circle: "match me." Gloo receives the user's onboarding profile (life season, plan topic, goals) and summaries of all open circles, and returns the best match with a short explanation displayed to the user before they confirm joining. Fallback per the Decisions section: an imperfect match is still offered with an honest explanation; zero open circles triggers immediate creation of a new `forming` circle with the user as founding member.
+- **Why this step comes here:** Needs circles (16), onboarding profiles (10), and Gloo (4). Placed after the core thread loop so matched users land in a functioning circle.
+- **Touches:** Matching flow UI, Gloo Completions V2, circles database.
+- **How to test it:** Seed two open circles with distinct topics (Psalms/grief-season vs Mark/new-believer). Onboard a new user whose goals say "learning the basics of Jesus' life": the match proposes the Mark circle with an explanation referencing that goal; confirm and land in its thread. Archive all open circles and repeat: a new `forming` circle is created immediately with a founding-member message.
+- **Definition of done:** A new user is matched to the most fitting open circle with a shown explanation, and never hits a dead end when no circle exists.
+
+### Step 22 — Cold-start icebreaker
+- **What gets built:** When a circle reaches minimum size (3) and flips to `active`, Gloo generates a personalised opening message referencing something specific from **two members' real onboarding answers**, posted to the thread as a system message attributed to "Round." Fires exactly once per circle (idempotency key on circle). There is no blank "say hi" state — the icebreaker is the first thread content in every new circle.
+- **Why this step comes here:** Needs the activation transition (16), the thread with system messages (17/20), and onboarding answers (10).
+- **Touches:** Icebreaker generation (Gloo Completions V2), circle state transition hook, thread, database.
+- **How to test it:** Create a fresh circle with member A (goal: "understand the Psalms in hard times"), join B (goal: "build a morning routine"), then C. On C's join, an icebreaker from "Round" appears that identifiably references A's and B's actual answers. Remove and re-add a member in dev: no second icebreaker.
+- **Definition of done:** Every circle reaching three members receives exactly one personalised icebreaker referencing two members' real onboarding answers.
+
+## Phase 6 — Scheduled Agents and the Daily Loop
+
+### Step 23 — Scheduling backbone: Vercel Cron, idempotency, dev triggers
+- **What gets built:** The `agent_runs` table with its unique `(agent_name, target_id, period_key)` constraint. Secured cron API routes (verifying `CRON_SECRET`) for each scheduled cadence: daily Facilitator+Summary sweep (per circle), daily Reminder sweep (per user), 12-hourly Health sweep (stub for now), daily demo refresh (activated in Step 31). `vercel.json` cron definitions. The Step 5 Agent Console gains buttons that hit these exact routes locally.
+- **Why this step comes here:** Facilitator, Reminder, Health, and the demo refresh all need this rail; building it once with idempotency proven means none of them can ever double-fire. Depends on Steps 2, 5.
+- **Touches:** Database (`agent_runs`), cron API routes, `vercel.json`, Agent Console.
+- **How to test it:** Hit the Facilitator cron route locally twice in a row via the Agent Console: the first creates `agent_runs` rows for eligible circles, the second reports "already ran" for every one and writes nothing. Call the route without the bearer secret: 401. After deploy, confirm in the Vercel dashboard that the cron jobs are registered and their scheduled invocations return 200.
+- **Definition of done:** Scheduled routes are live in production via Vercel Cron, locally triggerable via the console, and provably idempotent on double execution.
+
+### Step 24 — Facilitator Agent: daily digest
+- **What gets built:** On the daily sweep, for each circle where at least 50% of members (minimum 2) submitted reflections for the current plan day, the Facilitator synthesises them via Gloo into a digest: 2–3 sentence collective synthesis, an overlap callout naming which members landed on the same theme or line, and one discussion question grounded in the passage and the circle's own words. Posted to the thread as a "Round" digest card. Flagged reflections (Step 19) are excluded from input. One digest per circle per day, enforced by `agent_runs` plus a unique constraint on the digest itself.
+- **Why this step comes here:** The centrepiece daily AI moment; needs reflections (19) and the cron rail (23).
+- **Touches:** Facilitator agent, Gloo Completions V2, cron route, database (`digests`), thread UI.
+- **How to test it:** Have 2 of 3 members submit reflections that deliberately share a theme (both mention "still waters"). Trigger the Facilitator sweep from the Agent Console: a digest appears in the thread whose overlap callout names both members and the shared phrase, plus a discussion question echoing the circle's own words. Trigger the sweep again: no second digest. Run with only 1 of 3 reflections: no digest generated for that circle.
+- **Definition of done:** Circles meeting the reflection threshold receive exactly one daily digest with synthesis, named overlap callout, and a grounded discussion question.
+
+### Step 25 — Summary Agent: lesson summary
+- **What gets built:** Alongside each digest, the Summary agent generates a 3–5 sentence plain-language summary of the passage's main teaching, informed by the passage text and the themes the circle raised. Rendered as a collapsible card attached to the digest — available, never forced open. Runs in the same sweep, same idempotency period key.
+- **Why this step comes here:** The brief couples it to the digest ("alongside the daily digest"); it reuses Step 24's trigger and inputs directly.
+- **Touches:** Summary agent, Gloo Completions V2, digest sweep, thread UI.
+- **How to test it:** After the Step 24 test digest generates, the same thread shows a collapsed "Lesson summary" card; expanding it reveals 3–5 plain-language sentences consistent with the passage. Re-running the sweep produces no duplicate.
+- **Definition of done:** Every generated digest is accompanied by exactly one collapsible plain-language lesson summary.
+
+### Step 26 — Prayer Agent: on-demand prayer
+- **What gets built:** A "Generate a prayer" action in the circle thread. Gloo produces a 5–8 sentence first-person-plural prayer grounded in that day's circle discussion (reflections + digest), attributed "Round — based on today's reading," generated in the requesting user's language. Shown privately to the requester with copy and save actions — **not** broadcast to the circle. Saved prayers appear on the user's profile (Path A) or last for the session (Path B).
+- **Why this step comes here:** Needs the day's discussion content (19/24). On-demand, so no cron dependency.
+- **Touches:** Prayer agent, Gloo Completions V2, thread UI action, database (`saved_prayers`).
+- **How to test it:** After a day with reflections and a digest, tap "Generate a prayer": a first-person-plural prayer referencing the day's themes appears with the attribution line. Copy works; save works and the prayer shows on the profile. Confirm in a second member's session that nothing was posted to the thread.
+- **Definition of done:** Any member can generate, copy, and save a discussion-grounded prayer that is never auto-shared to the circle.
+
+### Step 27 — Translation Agent: multilingual thread
+- **What gets built:** On every new user-generated message or reflection post: source language detection (one Gloo call, author-profile-language fallback per the Decisions section); for each *distinct* preferred language among circle members that differs from the source, one Gloo translation call with the faith-context prompt; results written to `message_translations` (additive — originals untouched). Cache rule: a message is never re-translated for the same target language. Thread rendering: each reader sees messages in their own language by default with a "Translated by Round" label and a "Show original" toggle; pending translations show the original with a "Translating…" badge until the next poll swaps them. **Scripture references inside messages pass through as-is; Bible text is never an input to this agent.** Runs post-persist via `waitUntil` so posting is never blocked.
+- **Why this step comes here:** Tier 1 core loop, not polish — placed immediately after the thread content types it must cover (messages, reflections) are all in place. Depends on Steps 9, 17, 19.
+- **Touches:** Translation agent, Gloo Completions V2 (detect + translate), database (`message_translations`), thread UI, polling.
+- **How to test it:** Circle with a Spanish-preference member and an English-preference member. English member posts "This verse about mercy stopped me today." Spanish member's thread shows it in Spanish with the "Translated by Round" label within one poll cycle; the "Show original" toggle reveals the exact English original. Spanish member replies in Spanish; English member sees English. A second English member joining sees the cached translation with **no** new Gloo call (verify via `agent_logs`). Two same-language members: verify no translation call at all. Database check: original message bodies byte-identical to what was typed.
+- **Definition of done:** Cross-language members each read the full thread in their own language with originals preserved, toggleable, cached, and never re-translated per target language.
+
+### Step 28 — AI messages generated per-language (not translated)
+- **What gets built:** Digest, lesson summary, icebreaker, and conversation starters are generated by Gloo **directly in each distinct member language** present in the circle (one generation per language, stored as language variants of the AI message), per the brief's rule that AI content is never translated after the fact. The thread renders the variant matching the reader's language. Prayer (Step 26) already generates in the requester's language.
+- **Why this step comes here:** Modifies the agents built in Steps 20/22/24/25, and needs the multilingual rendering from Step 27. Isolated here so those steps stayed single-language-testable.
+- **Touches:** Facilitator, Summary, PostReading, icebreaker generation; digest/thread rendering; database (language-variant storage).
+- **How to test it:** In the mixed English/Spanish circle, trigger the Facilitator sweep: the English member reads the digest in English, the Spanish member in Spanish, and **neither shows a "Translated by Round" label** (they are native generations, not translations). `agent_logs` shows one Facilitator generation per language, and no Translation agent run for the digest.
+- **Definition of done:** All recurring AI thread content renders natively in each member's language with no post-hoc translation involved.
+
+### Step 29 — Reminder Agent, in-app notifications, and email
+- **What gets built:** An in-app notification model (bell + list, fed by polling). The daily Reminder sweep (on the Step 23 rail) generates via Gloo: a **reading reminder** for any user 2+ days behind their plan (referencing the missed passage and what their circle discussed) and a **message notification** for unread circle messages older than 24 hours (short summary of what was missed). Delivery: in-app always; email additionally if an address is on file — plain text, no tracking pixels, via the email abstraction (Resend in production, Mailpit locally). Idempotent per user+type+day. Instant Access users receive neither (no address, no persistence), per the brief.
+- **Why this step comes here:** Needs plan progress (14), thread activity (17+), digests for context (24), and the cron rail (23).
+- **Touches:** Reminder agent, Gloo Completions V2, cron route, database (`notifications`), Resend/Mailpit, notification UI.
+- **How to test it:** Locally: set a test user's progress 3 days behind, trigger the Reminder sweep from the Agent Console — an in-app notification appears naming the missed passage, and the email is visible in the Mailpit UI as plain text with no HTML tracking. Trigger the sweep again: no duplicates in-app or in Mailpit. In production with a real address: receive the actual Resend email once.
+- **Definition of done:** Behind-schedule users get personalised reminders and inactive readers get message summaries, in-app always and by plain-text email when available, exactly once per day.
+
+## Phase 7 — Instant Access End-to-End
+
+### Step 30 — Demo circle and full anonymous participation
+- **What gets built:** A seed script creates the system-owned demo circle: realistic member personas, prior reflections, a digest, a lesson summary, and starters (generated via real Gloo calls at seed time). Instant Access users land with the demo circle joinable in one tap: they read the digest and prior reflections, and can submit their own reflection — which runs through the Escalation Agent exactly as normal and appears in the thread under their "Reader #n" name. Anonymous reflections are stored tagged with the anonymous session ID (pruned in Step 31). The upgrade prompt ("Save your progress — sign in with YouVersion") is reachable from every screen and completes into a real Path A account. Confirmed absent for anonymous users: email reminders, Echoes, circle matching.
+- **Why this step comes here:** Every capability it stitches together (passage, prompts, reflections, escalation, digest, prayer, summary) now exists; the session abstraction from Step 8 means this step is composition plus seed data, not new feature code.
+- **Touches:** Seed script, demo circle data, anonymous session flows, Escalation pipeline, upgrade prompt UI, OAuth handoff.
+- **How to test it:** Full dress rehearsal in an incognito window on **production**: one tap in → optional language pick → pre-reading prompts → live passage → finish reading → starters → open demo circle → read digest and reflections → submit a reflection (appears as "Reader #n") → generate a prayer → tap upgrade and complete YouVersion sign-in. Separately, submit a crisis-phrased reflection anonymously: the support card appears, nothing surfaces in the thread. Every AI response along the way is live (verify `agent_logs` timestamps).
+- **Definition of done:** A brand-new visitor completes the entire read-reflect-discuss loop in the demo circle with zero sign-up, all AI calls live, and can upgrade to a full account at any point.
+
+### Step 31 — Demo freshness and anonymous data pruning
+- **What gets built:** The daily demo-refresh cron job (rail from Step 23): re-dates seeded demo content to appear current, regenerates the demo digest/summary/starters via real Gloo calls so wording varies day to day, and prunes anonymous-session reflections older than the previous refresh. The demo circle therefore always looks alive *today*, and no anonymous data outlives its session in spirit or letter.
+- **Why this step comes here:** Extends Step 30's seed into an ongoing guarantee; uses the Step 23 rail.
+- **Touches:** Demo refresh cron route, demo data, Gloo Completions V2, pruning logic.
+- **How to test it:** Trigger the refresh from the Agent Console: demo timestamps update to today and the digest text changes (new Gloo generation). Submit an anonymous reflection, trigger the refresh again: the anonymous reflection is gone, seeded content remains. Verify the production cron is registered in the Vercel dashboard and its runs are idempotent within a day.
+- **Definition of done:** The demo circle always displays current-dated, freshly generated content, and anonymous reflections are pruned daily.
+
+## Phase 8 — Tier 2 Implementations (into the existing stubs)
+
+### Step 32 — RAG corpus: Psalms commentary upload
+- **What gets built:** A processing script that takes the provided Psalms commentary PDF, chunks it **by Psalm**, and uploads the chunks to a Gloo Grounded Completions dataset with per-chunk metadata (Psalm number, source, licence). The Gloo client's Grounded Completions method (placeholder since Step 4) is completed. A dev-only route queries the dataset for a given Psalm and returns retrieved chunks.
+- **Why this step comes here:** The Context Agent (33) is only as good as its corpus; retrieval must be proven independently before it feeds the Facilitator. Depends on Step 4.
+- **Touches:** Processing script, Gloo Grounded Completions dataset, Gloo client, dev route.
+- **How to test it:** Run the script against the PDF; confirm upload success in Gloo AI Studio. `curl` the dev retrieval route for "Psalm 23": returned chunks are demonstrably about Psalm 23 (shepherd imagery, historical notes), not adjacent Psalms.
+- **Definition of done:** The chunked commentary corpus is live in Gloo and returns relevant, correctly-scoped chunks for a queried Psalm.
+
+### Step 33 — Context Agent (implementing the Step 5 stub)
+- **What gets built:** The Context stub becomes real: when the Facilitator sweep processes a circle whose current passage is a Psalm, the Context Agent first retrieves relevant commentary chunks via Grounded Completions, **restates archaic commentary language in plain modern language** (a Gloo pass), and hands the result to the Facilitator as additional grounding. The digest card gains a source attribution line when RAG was used (e.g. "Historical context from [source], public domain"). Non-Psalms passages skip Context entirely — the stub's no-op path remains for them. No interface changes to the Facilitator beyond consuming the optional grounding — proving the stub architecture worked.
+- **Why this step comes here:** Slots between corpus (32) and the long-established Facilitator (24). Explicitly the brief's "before Facilitator, Psalms only" trigger.
+- **Touches:** Context agent, Gloo Grounded Completions, Facilitator input, digest UI (attribution line).
+- **How to test it:** Run the Facilitator sweep for a circle on a Psalms plan day: the digest includes commentary-informed context in modern language and shows the source attribution line; `agent_logs` shows Context running before Facilitator. Run it for a circle reading Mark: no Context retrieval occurs and no attribution line appears.
+- **Definition of done:** Psalms digests are RAG-grounded with visible source attribution and modernised commentary language, while non-Psalms digests are untouched.
+
+### Step 34 — Health Agent (implementing the Step 5 stub)
+- **What gets built:** The Health stub becomes real on its 12-hourly sweep: per circle, engagement signals (days since last reflection, response rate, silent members) are gathered and Gloo classifies the circle healthy / at-risk / stalled and selects one action — nudge quiet members (via the Step 29 notification path), offer a returning member a catch-up bridge summary, or propose a merge with a compatible stalled circle. **Every decision is logged with full reasoning** in a decision log. Merges require the transparency flow: every affected user receives a human-readable notification explaining what happened and why — no silent changes. Circle state transitions (active→stalled, stalled→archived) are driven from here.
+- **Why this step comes here:** Needs mature engagement data (reflections, threads, notifications) and the cron rail; it composes them rather than adding new primitives.
+- **Touches:** Health agent, Gloo Completions V2, cron route, decision log table, notifications, circle states.
+- **How to test it:** In dev, back-date one circle's activity to simulate 5 quiet days. Trigger the Health sweep: the circle is classified at-risk/stalled, the decision log shows the classification with written reasoning, and quiet members receive a nudge notification. Simulate two compatible stalled circles and trigger a merge proposal: every member of both circles receives a plain-language explanation notification, and the log records the full rationale. Re-trigger the sweep: no duplicate actions within the period.
+- **Definition of done:** The Health Agent autonomously classifies and acts on circle health with every decision logged with reasoning and every affected user explicitly notified.
+
+### Step 35 — Flashcard Agent (implementing the Step 5 stub)
+- **What gets built:** The Flashcard stub becomes real: after completing a reading, a "Generate flashcards" action has Gloo produce a 3–5 card deck from the passage — front (key verse or concept), back (short explanation or question) — each card linked to the passage reference. Users mark cards "know it" / "review again"; marks persist for signed-in users and last the session for Instant Access. A simple deck review UI cycles the cards.
+- **Why this step comes here:** Self-contained, depends only on completion (14) and the agent framework (5); last because nothing else depends on it.
+- **Touches:** Flashcard agent, Gloo Completions V2, deck UI, database (`flashcards`, review marks).
+- **How to test it:** Complete a reading, tap "Generate flashcards": 3–5 cards appear, fronts drawn from the actual passage; flip a card, mark "review again," leave and return — the mark persisted and the deck links back to the correct reference. As an anonymous user, generate a deck: fully functional for the session.
+- **Definition of done:** Users on both paths can generate, flip, and mark a passage-linked flashcard deck after reading.
+
+## Phase 9 — Tier 3 Scoping and Final Audit
+
+### Step 36 — Tier 3 future-directions writeup and constraint audit
+- **What gets built:** Documentation, not features. The technical writeup names and scopes the Tier 3 directions: **Echoes** (Memory Agent scoring old highlights against current circle activity to resurface a relevant past highlight — the Memory stub from Step 5 remains its landing point), **Bridge Agent** (extended catch-up experiences beyond the Health Agent's bridge summary), **Retrospective** (end-of-plan circle journey recap), and **Verse of the Day** (home-screen touchpoint). Alongside it, a final constraint audit of the codebase: grep-verified absence of any direct OpenAI/Anthropic/other-provider calls (judges will check); no hardcoded Bible text anywhere; no code path feeding Bible text into the Translation agent; Escalation ordering intact in the reflection pipeline; Tier 2/3 stubs and implementations consistent with the Step 5 interfaces; no UI surface exposing inter-member pace or streaks.
+- **Why this step comes here:** The competition requires Tier 3 as named future directions in the writeup, and the audit belongs after all code is in.
+- **Touches:** Technical writeup document, codebase-wide audit.
+- **How to test it:** Run the audit checklist: dependency and source grep for other AI providers returns nothing; grep for embedded Scripture strings returns nothing; a traced reflection submission shows Escalation first in the pipeline; the Memory stub still returns its structured no-op. The writeup names all Tier 3 features with scope notes.
+- **Definition of done:** The writeup documents Tier 3 directions and the audit confirms every design constraint holds in the shipped codebase.
+
+---
+
+## Verification (end-to-end, after Step 36)
+
+Two dress rehearsals on **production**:
+1. **Path A:** YouVersion OAuth sign-in with highlight consent → onboarding (Spanish/NVI, goals) → AI-generated plan (validated refs) → AI match into a circle → pre-reading prompts → live NVI passage + highlight → finish → starters in thread → reflection (Escalation-gated) → next-day digest + summary via cron → prayer → cross-language thread with a second English-preference account (translations cached, originals toggleable) → fall 2 days behind → reminder email arrives (Resend, plain text).
+2. **Path B:** Incognito, one tap → defaults → full read-reflect loop in the demo circle as "Reader #n" → flashcards → upgrade to Path A mid-session.
+
+Plus the idempotency drill: trigger every cron route twice back-to-back from the Agent Console and confirm zero duplicate digests, summaries, reminders, icebreakers, or Health actions.
