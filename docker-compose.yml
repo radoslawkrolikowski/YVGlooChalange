@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:16
+    ports:
+      # Host port 5433 — 5432 is commonly taken by a system-wide Postgres.
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: round
+      POSTGRES_PASSWORD: round
+      POSTGRES_DB: round
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U round -d round"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025" # SMTP — local email driver target (used from Step 29)
+      - "8025:8025" # Web UI — inspect outgoing mail at http://localhost:8025
+
+volumes:
+  pgdata:

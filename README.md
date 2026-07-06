@@ -16,8 +16,18 @@ NextAuth.js (YouVersion OAuth) · Resend
 ```bash
 npm install
 cp .env.example .env.local   # fill in values as steps require them
+docker compose up -d         # PostgreSQL 16 (localhost:5433) + Mailpit (http://localhost:8025)
+npm run db:migrate           # apply committed migrations to the local database
 npm run dev                  # http://localhost:3000
 ```
+
+Database round-trip check: `curl localhost:3000/api/health` should return
+`{"ok":true,...}` with a database timestamp.
+
+Schema changes: edit `src/db/schema.ts`, run `npm run db:generate` to produce
+a SQL migration in `drizzle/`, then `npm run db:migrate` to apply it locally.
+Migrations are committed and run automatically in the production build
+(`npm run build` = `drizzle-kit migrate && next build`).
 
 ## Deployment pipeline
 
