@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "@youversion/platform-core": "^2.2.0",
     "drizzle-orm": "^0.45.2",
     "next": "^16.2.10",
     "pg": "^8.22.0",
