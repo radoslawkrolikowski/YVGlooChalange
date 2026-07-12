@@ -58,6 +58,33 @@ export interface BibleVersion {
   deepLink?: string;
 }
 
+export interface BibleIndexChapter {
+  /** Passage ID to fetch this chapter with, e.g. "JHN.3". */
+  passageId: string;
+  /** Chapter title, usually the chapter number, e.g. "3". */
+  title: string;
+  verseCount: number;
+}
+
+export interface BibleIndexBook {
+  /** USFM book ID, e.g. "JHN". */
+  id: string;
+  /** Short book title, e.g. "John". */
+  title: string;
+  fullTitle: string;
+  abbreviation: string;
+  /** Canonical section, e.g. "old_testament", "new_testament". */
+  canon: string;
+  chapters: BibleIndexChapter[];
+}
+
+export interface BibleIndex {
+  versionId: number;
+  /** Text direction, "ltr" or "rtl". */
+  textDirection: string;
+  books: BibleIndexBook[];
+}
+
 // The versions endpoint takes ISO 639-3 language ranges; the app speaks
 // ISO 639-1 (en/es/pt) everywhere else. Two-letter codes are mapped, and
 // three-letter codes pass through so any 639-3 tag works directly.
@@ -179,6 +206,36 @@ export async function fetchVersion(versionId: number): Promise<BibleVersion> {
   return toBibleVersion(
     await callSdk(endpoint, () => bibleClient().getVersion(versionId)),
   );
+}
+
+/**
+ * Fetch the book/chapter structure of a Bible version — drives the book and
+ * chapter pickers. The SDK's full index also carries every verse of every
+ * chapter; it is slimmed here to per-chapter passage IDs and verse counts,
+ * which is what navigation needs and what is worth caching.
+ */
+export async function fetchBibleIndex(versionId: number): Promise<BibleIndex> {
+  const endpoint = `index for version ${versionId}`;
+  const index = await callSdk(endpoint, () =>
+    bibleClient().getIndex(versionId),
+  );
+
+  return {
+    versionId,
+    textDirection: index.text_direction,
+    books: index.books.map((book) => ({
+      id: book.id,
+      title: book.title,
+      fullTitle: book.full_title,
+      abbreviation: book.abbreviation,
+      canon: book.canon,
+      chapters: book.chapters.map((chapter) => ({
+        passageId: chapter.passage_id,
+        title: chapter.title,
+        verseCount: chapter.verses.length,
+      })),
+    })),
+  };
 }
 
 /**
