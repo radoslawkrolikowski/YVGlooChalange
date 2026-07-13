@@ -15,6 +15,13 @@
       "when": 1783855251689,
       "tag": "0001_sweet_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783950124277,
+      "tag": "0002_true_lyja",
+      "breakpoints": true
     }
   ]
 }
