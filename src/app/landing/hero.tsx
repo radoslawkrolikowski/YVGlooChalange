@@ -104,7 +104,7 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
             whose edges drift ±20–60px — mist rolling in from the text column
             instead of a ruler-straight gradient. */}
         <svg
-          className="absolute inset-y-0 left-0 h-full w-[55%]"
+          className="absolute inset-y-0 left-0 h-full w-[45%]"
           viewBox="0 0 400 900"
           preserveAspectRatio="none"
           aria-hidden
@@ -121,7 +121,7 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
           <path
             d="M0 0 H210 C 260 90, 170 190, 225 300 C 280 410, 160 500, 215 620 C 265 730, 175 800, 230 900 H0 Z"
             fill="var(--color-parchment)"
-            opacity="0.55"
+            opacity="0.40"
             filter="url(#mist-soft)"
           />
           {/* Near drift: tighter contour, stronger presence */}
@@ -137,7 +137,7 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
             fetch succeeded. Rendering nothing beats rendering hardcoded text.
             Sits above the bottom mask fade, on the dark water. */}
         {verse && (
-          <figure className="absolute inset-x-8 bottom-16 text-center md:bottom-24">
+          <figure className="absolute inset-x-8 bottom-16 text-center md:bottom-24 md:left-[42%] md:right-12 lg:left-[40%] lg:right-16">
             <blockquote
               className="font-hand text-2xl leading-snug text-gold-soft/95"
               style={{ textShadow: "0 1px 14px rgba(15, 34, 30, 0.7)" }}
