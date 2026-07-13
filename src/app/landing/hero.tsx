@@ -70,7 +70,7 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
         initial={reduced ? false : { opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 1.4, ease: "easeOut" }}
-        className="relative aspect-[4/5] w-full overflow-hidden rounded-[2rem] shadow-raised md:aspect-auto md:h-[34rem]"
+        className="relative aspect-[4/5] w-full md:aspect-auto md:h-[36rem]"
         aria-hidden={verse ? undefined : true}
       >
         <Image
@@ -82,17 +82,29 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
           sizes="(min-width: 768px) 50vw, 100vw"
           className="object-cover"
         />
-        {/* Soft darkening at the base so the quote stays legible */}
-        <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-forest-deep/70 to-transparent" />
+        {/* Seamless dissolve into the page: an elliptical parchment vignette
+            (no frame, no edge) plus a wider wash toward the text column. The
+            overlays match the page background exactly, so the image appears
+            to melt into mist rather than sit in a box. */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse 72% 62% at 58% 46%, transparent 42%, color-mix(in oklab, var(--color-parchment) 55%, transparent) 74%, var(--color-parchment) 98%)",
+          }}
+        />
+        <div className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-parchment via-parchment/50 to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-1/4 bg-gradient-to-b from-parchment to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-parchment via-parchment/60 to-transparent" />
 
         {/* Scripture quote — fetched live from YouVersion, shown only when the
             fetch succeeded. Rendering nothing beats rendering hardcoded text. */}
         {verse && (
-          <figure className="absolute inset-x-6 bottom-6 text-center">
-            <blockquote className="font-hand text-2xl leading-snug text-gold-soft/95">
+          <figure className="absolute inset-x-8 bottom-4 text-center">
+            <blockquote className="font-hand text-2xl leading-snug text-charcoal/80">
               “{verse.text}”
             </blockquote>
-            <figcaption className="mt-1 text-xs tracking-wide text-gold-soft/60">
+            <figcaption className="mt-1 text-xs tracking-wide text-gold">
               {verse.reference} · {verse.versionAbbreviation}
             </figcaption>
           </figure>
