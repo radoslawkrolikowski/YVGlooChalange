@@ -90,10 +90,41 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(ellipse 78% 68% at 56% 46%, transparent 58%, color-mix(in oklab, var(--color-parchment) 45%, transparent) 82%, var(--color-parchment) 100%)",
+              "radial-gradient(ellipse 76% 66% at 56% 46%, transparent 57%, color-mix(in oklab, var(--color-parchment) 50%, transparent) 78%, var(--color-parchment) 99%)",
           }}
         />
-        <div className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-parchment via-parchment/35 to-transparent" />
+        {/* Organic left contour: two blurred, irregular parchment silhouettes
+            whose edges drift ±20–60px — mist rolling in from the text column
+            instead of a ruler-straight gradient. */}
+        <svg
+          className="absolute inset-y-0 left-0 h-full w-[55%]"
+          viewBox="0 0 400 900"
+          preserveAspectRatio="none"
+          aria-hidden
+        >
+          <defs>
+            <filter id="mist-soft" x="-60%" y="-20%" width="220%" height="140%">
+              <feGaussianBlur stdDeviation="42" />
+            </filter>
+            <filter id="mist-near" x="-60%" y="-20%" width="220%" height="140%">
+              <feGaussianBlur stdDeviation="24" />
+            </filter>
+          </defs>
+          {/* Far drift: wide, faint, slow undulation */}
+          <path
+            d="M0 0 H210 C 260 90, 170 190, 225 300 C 280 410, 160 500, 215 620 C 265 730, 175 800, 230 900 H0 Z"
+            fill="var(--color-parchment)"
+            opacity="0.55"
+            filter="url(#mist-soft)"
+          />
+          {/* Near drift: tighter contour, stronger presence */}
+          <path
+            d="M0 0 H130 C 175 70, 95 170, 150 270 C 205 370, 85 470, 140 580 C 195 690, 100 780, 155 900 H0 Z"
+            fill="var(--color-parchment)"
+            opacity="0.9"
+            filter="url(#mist-near)"
+          />
+        </svg>
         <div className="absolute inset-x-0 top-0 h-1/6 bg-gradient-to-b from-parchment to-transparent" />
         <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-parchment via-parchment/40 to-transparent" />
 
