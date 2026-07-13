@@ -92,11 +92,14 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
           sizes="(min-width: 768px) 55vw, 100vw"
           className="object-cover"
           style={{
+            // The first 10% stays fully transparent — zero image pixels —
+            // so the leftmost edge is the literal page background, not a
+            // near-invisible image tint over it.
             maskImage:
-              "linear-gradient(to right, transparent 0%, black 38%), linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%)",
+              "linear-gradient(to right, transparent 0%, transparent 10%, black 42%), linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%)",
             maskComposite: "intersect",
             WebkitMaskImage:
-              "linear-gradient(to right, transparent 0%, black 38%), linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%)",
+              "linear-gradient(to right, transparent 0%, transparent 10%, black 42%), linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%)",
             WebkitMaskComposite: "source-in",
           }}
         />
