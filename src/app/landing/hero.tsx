@@ -141,7 +141,7 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
             Sits above the bottom mask fade, on the dark water. */}
         {verse && (
           <figure
-            className="absolute inset-x-8 bottom-16 rounded-3xl px-6 py-4 text-center md:bottom-24 md:left-[26%] md:right-10"
+            className="absolute inset-x-8 bottom-16 rounded-3xl px-6 py-4 text-center md:bottom-24 md:left-[26%] md:right-10 md:-translate-x-8"
             style={{
               background:
                 "radial-gradient(ellipse at center, rgba(15, 34, 30, 0.5) 0%, transparent 75%)",
