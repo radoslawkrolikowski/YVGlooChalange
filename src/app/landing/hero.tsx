@@ -2,8 +2,10 @@
 
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { ArrowRight } from "lucide-react";
+import Image from "next/image";
 import { useRef } from "react";
 import { useInstantAccess } from "@/lib/use-instant-access";
+import heroImage from "@/assets/main_image_landing_page.png";
 
 export interface HeroVerse {
   /** Verse text fetched live from YouVersion — never hardcoded. */
@@ -62,7 +64,7 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
         {error && <p className="text-sm text-danger">{error}</p>}
       </motion.div>
 
-      {/* Right: atmospheric scene, CSS/SVG only — no stock photography */}
+      {/* Right: atmospheric hero image with the glowing Round ring motif */}
       <motion.div
         style={{ y: drift }}
         initial={reduced ? false : { opacity: 0, scale: 0.98 }}
@@ -71,57 +73,17 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
         className="relative aspect-[4/5] w-full overflow-hidden rounded-[2rem] shadow-raised md:aspect-auto md:h-[34rem]"
         aria-hidden={verse ? undefined : true}
       >
-        {/* Layered dawn: deep forest horizon, gold bloom, mist */}
-        <div className="absolute inset-0 bg-gradient-to-b from-gold-soft via-[color-mix(in_oklab,var(--color-gold)_45%,var(--color-parchment))] to-forest-deep" />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(60% 45% at 50% 42%, color-mix(in oklab, var(--color-gold) 70%, white) 0%, transparent 70%)",
-          }}
+        <Image
+          src={heroImage}
+          alt="Sunrise over a mountain river framed by a glowing circle of light"
+          fill
+          priority
+          placeholder="blur"
+          sizes="(min-width: 768px) 50vw, 100vw"
+          className="object-cover"
         />
-        {/* Glowing ring — the Round motif */}
-        <svg
-          viewBox="0 0 400 500"
-          className="absolute inset-0 h-full w-full"
-          aria-hidden
-        >
-          <defs>
-            <radialGradient id="bloom" cx="50%" cy="42%" r="40%">
-              <stop offset="0%" stopColor="#fff7e0" stopOpacity="0.9" />
-              <stop offset="100%" stopColor="#fff7e0" stopOpacity="0" />
-            </radialGradient>
-            <filter id="soften">
-              <feGaussianBlur stdDeviation="2.5" />
-            </filter>
-          </defs>
-          <circle cx="200" cy="210" r="118" fill="url(#bloom)" />
-          <circle
-            cx="200"
-            cy="210"
-            r="112"
-            fill="none"
-            stroke="#fdf3d8"
-            strokeWidth="3"
-            filter="url(#soften)"
-            opacity="0.95"
-          />
-          <circle
-            cx="200"
-            cy="210"
-            r="112"
-            fill="none"
-            stroke="#f3e0b0"
-            strokeWidth="8"
-            filter="url(#soften)"
-            opacity="0.25"
-          />
-          {/* Still water: horizon line and soft reflections */}
-          <rect x="0" y="330" width="400" height="170" fill="#0f221e" opacity="0.55" />
-          <ellipse cx="200" cy="345" rx="130" ry="7" fill="#f3e0b0" opacity="0.3" filter="url(#soften)" />
-          <ellipse cx="200" cy="368" rx="90" ry="5" fill="#f3e0b0" opacity="0.18" filter="url(#soften)" />
-          <ellipse cx="200" cy="392" rx="55" ry="4" fill="#f3e0b0" opacity="0.1" filter="url(#soften)" />
-        </svg>
+        {/* Soft darkening at the base so the quote stays legible */}
+        <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-forest-deep/70 to-transparent" />
 
         {/* Scripture quote — fetched live from YouVersion, shown only when the
             fetch succeeded. Rendering nothing beats rendering hardcoded text. */}
