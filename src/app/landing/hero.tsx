@@ -137,7 +137,7 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
             fetch succeeded. Rendering nothing beats rendering hardcoded text.
             Sits above the bottom mask fade, on the dark water. */}
         {verse && (
-          <figure className="absolute inset-x-8 bottom-16 text-center md:bottom-24 md:left-[42%] md:right-12 lg:left-[40%] lg:right-16">
+          <figure className="absolute inset-x-8 bottom-16 text-center md:bottom-24 md:left-[26%] md:right-10">
             <blockquote
               className="font-hand text-2xl leading-snug text-gold-soft/95"
               style={{ textShadow: "0 1px 14px rgba(15, 34, 30, 0.7)" }}
