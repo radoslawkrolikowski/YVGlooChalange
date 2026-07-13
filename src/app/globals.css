@@ -20,6 +20,18 @@
   --color-surface-soft: #f5f7fa;
   --color-disabled: #cbd2d9;
 
+  /* Landing palette — warm editorial neutrals (Step 8A landing redesign).
+     App-interior screens keep the teal brand tokens above. */
+  --color-parchment: #f6f1e7;
+  --color-ivory: #fdfbf5;
+  --color-sage: #9aa88f;
+  --color-sage-soft: #e7ebe2;
+  --color-forest: #16302a;
+  --color-forest-deep: #0f221e;
+  --color-charcoal: #2d2a25;
+  --color-gold: #b8935a;
+  --color-gold-soft: #ecdfc8;
+
   /* Semantic */
   --color-success: #1a7f4f;
   --color-success-soft: #e6f4ec;
@@ -35,6 +47,7 @@
   --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI",
     Roboto, sans-serif;
   --font-serif: var(--font-lora), Georgia, "Times New Roman", serif;
+  --font-hand: var(--font-caveat), "Segoe Script", cursive;
   --text-xs: 0.75rem;
   --text-xs--line-height: 1rem;
   --text-sm: 0.875rem;

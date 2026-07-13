@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Lora } from "next/font/google";
+import { Caveat, Inter, Lora } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
@@ -11,6 +11,12 @@ const inter = Inter({
 const lora = Lora({
   subsets: ["latin"],
   variable: "--font-lora",
+});
+
+// Handwritten face for the hero scripture quote only.
+const caveat = Caveat({
+  subsets: ["latin"],
+  variable: "--font-caveat",
 });
 
 export const metadata: Metadata = {
@@ -31,7 +37,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${lora.variable}`}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${lora.variable} ${caveat.variable}`}
+    >
       <body>{children}</body>
     </html>
   );
