@@ -14,7 +14,7 @@ const variants: Record<Variant, string> = {
   secondary:
     "border border-primary bg-surface text-primary hover:bg-primary-light active:bg-primary-light",
   ghost: "bg-transparent text-primary hover:bg-primary-light active:bg-primary-light",
-  destructive: "bg-danger text-white hover:bg-[#8f1e18] active:bg-[#8f1e18]",
+  destructive: "bg-danger text-white hover:bg-danger-dark active:bg-danger-dark",
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
