@@ -140,14 +140,26 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
             fetch succeeded. Rendering nothing beats rendering hardcoded text.
             Sits above the bottom mask fade, on the dark water. */}
         {verse && (
-          <figure className="absolute inset-x-8 bottom-16 text-center md:bottom-24 md:left-[26%] md:right-10">
+          <figure
+            className="absolute inset-x-8 bottom-16 rounded-3xl px-6 py-4 text-center md:bottom-24 md:left-[26%] md:right-10"
+            style={{
+              background:
+                "radial-gradient(ellipse at center, rgba(15, 34, 30, 0.5) 0%, transparent 75%)",
+            }}
+          >
             <blockquote
-              className="font-hand text-2xl leading-snug text-gold-soft/95"
-              style={{ textShadow: "0 1px 14px rgba(15, 34, 30, 0.7)" }}
+              className="font-hand text-2xl leading-snug text-ivory"
+              style={{
+                textShadow:
+                  "0 1px 3px rgba(15, 34, 30, 0.9), 0 2px 18px rgba(15, 34, 30, 0.8)",
+              }}
             >
               “{verse.text}”
             </blockquote>
-            <figcaption className="mt-1 text-xs tracking-wide text-gold-soft/70">
+            <figcaption
+              className="mt-1 text-xs font-medium tracking-wide text-ivory/85"
+              style={{ textShadow: "0 1px 6px rgba(15, 34, 30, 0.9)" }}
+            >
               {verse.reference} · {verse.versionAbbreviation}
             </figcaption>
           </figure>
