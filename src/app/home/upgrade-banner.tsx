@@ -2,34 +2,30 @@
 
 import { useState } from "react";
 
-// Step 8: the persistent upgrade affordance for anonymous sessions. The
-// actual YouVersion OAuth flow is Step 6 (currently deferred) — tapping the
-// button explains that until it lands.
+// Step 8: the persistent upgrade affordance for anonymous sessions, pinned
+// above the header on every app screen. The actual YouVersion OAuth flow is
+// Step 6 (currently deferred) — tapping explains that until it lands.
 export function UpgradeBanner() {
   const [note, setNote] = useState(false);
 
   return (
-    <aside
-      style={{
-        position: "sticky",
-        bottom: 0,
-        marginTop: "2rem",
-        padding: "0.75rem 1rem",
-        border: "1px solid #ccc",
-        borderRadius: 8,
-        background: "#fafafa",
-      }}
-    >
-      <span style={{ marginRight: "0.75rem" }}>Save your progress —</span>
-      <button type="button" onClick={() => setNote(true)}>
-        Sign in with YouVersion
-      </button>
-      {note && (
-        <p style={{ margin: "0.5rem 0 0", fontSize: "0.85rem", color: "#666" }}>
-          Sign-in with YouVersion is coming soon (Step 6). Your current session
-          stays anonymous.
-        </p>
-      )}
+    <aside className="sticky top-0 z-20 bg-primary-dark px-4 py-2.5 text-sm text-white">
+      <div className="mx-auto flex max-w-lg flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <span>Save your progress —</span>
+        <button
+          type="button"
+          onClick={() => setNote(true)}
+          className="font-semibold underline underline-offset-2 hover:text-primary-light"
+        >
+          Sign in with YouVersion
+        </button>
+        {note && (
+          <p className="w-full text-xs text-primary-light">
+            Sign-in with YouVersion is coming soon (Step 6). Your current
+            session stays anonymous.
+          </p>
+        )}
+      </div>
     </aside>
   );
 }

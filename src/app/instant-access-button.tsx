@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui";
 
 export const ANON_TOKEN_STORAGE_KEY = "round.anonSessionToken";
 
@@ -29,19 +30,31 @@ export function InstantAccessButton() {
   }
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={enter}
-        disabled={busy}
-        style={{ padding: "0.6rem 1.4rem", fontSize: "1rem" }}
-      >
-        {busy ? "Entering…" : "Try Round instantly"}
-      </button>
-      <p style={{ fontSize: "0.85rem", color: "#666" }}>
-        No form, no account. Nothing is saved after you close the browser.
-      </p>
-      {error && <p style={{ color: "#b00020" }}>{error}</p>}
+    <div className="flex flex-col gap-2">
+      <Button variant="secondary" full onClick={enter} disabled={busy}>
+        {busy ? "Entering…" : "Try instantly"}
+      </Button>
+      {error && <p className="text-sm text-danger">{error}</p>}
+    </div>
+  );
+}
+
+// Path A's primary CTA. The real YouVersion OAuth flow is Step 6 (currently
+// deferred) — until it lands, tapping explains that instead of redirecting.
+export function SignInButton() {
+  const [note, setNote] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Button full onClick={() => setNote(true)}>
+        Sign in with YouVersion
+      </Button>
+      {note && (
+        <p className="text-center text-sm text-ink-soft">
+          Sign-in with YouVersion is coming soon (Step 6). Try Round instantly
+          below in the meantime.
+        </p>
+      )}
     </div>
   );
 }

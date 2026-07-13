@@ -126,6 +126,78 @@ Non-negotiable constraints threaded through every step: all AI calls go through 
 - **How to test it:** Open the production URL in a private/incognito window, tap "Try Round instantly" — land inside the app with no form, seeing an assigned "Reader #n" identity and default language/version. Close the window, reopen: session gone, fresh entry works again. Verify no `users` row was created.
 - **Definition of done:** A visitor reaches the app interior in one tap with no account, holds a working anonymous session for the browser session only, and no database user row exists for them.
 
+### Step 8A — Design system and production-ready UI for Steps 1–8
+
+- **What gets built:** Round's complete design system and a polish pass
+  on every screen built so far. This step produces no new features —
+  it makes the existing ones look and feel like a real product.
+
+  Design tokens (configured in Tailwind):
+  - Primary: teal #1B6B6B with light (#E8F5F5) and dark (#134F4F)
+    variants
+  - Neutral greys for body text, borders, backgrounds, and disabled
+    states
+  - Typography: font family, size scale (xs through 2xl), weights
+    (normal, medium, semibold, bold), and line heights
+  - Border radius, shadow, and spacing scale consistent across all
+    components
+
+  Core reusable component library (used by all future steps):
+  - Primary button, secondary button, ghost button, destructive button
+  - Text input and textarea with label, helper text, error state
+  - Card container (flat and elevated variants)
+  - Avatar chip (shows initials or display name in a circle)
+  - Badge (status indicator: forming, active, stalled)
+  - Notification banner (info, success, warning, error)
+  - Loading skeleton (block and text variants)
+  - Empty state (icon + heading + subtext + optional CTA)
+  - Divider and section header
+
+  Mobile-first layout shell:
+  - Page wrapper with safe-area insets for iOS
+  - Top header bar (logo left, action right)
+  - Scrollable content area
+  - Bottom navigation bar (placeholder tabs for: Home, My Plan,
+    Circles, Profile)
+
+  Screens polished to production quality:
+  - Landing page: Round wordmark and tagline, brief one-line value
+    proposition, "Sign in with YouVersion" as primary CTA, "Try
+    instantly" as secondary CTA, clean background — looks like a
+    product someone would want to use
+  - Signed-in home: warm welcome with the user's display name, clear
+    next action ("Start reading" placeholder pointing to today's plan)
+  - Anonymous home: same layout as signed-in home, "Reader #n"
+    displayed clearly, upgrade prompt banner persistent at the top
+  - Highlight import consent screen: readable explanation of exactly
+    what is imported and why, primary "Allow" and secondary "Skip"
+    actions, no dark patterns
+  - Profile screen: clean layout showing imported highlights count,
+    revoke/delete option with a confirmation step, sign-out action
+
+- **Why this step comes here:** Steps 9–36 all build new screens. If
+  the design system does not exist before they start, every step will
+  make its own styling decisions and the result will be incoherent. All
+  subsequent steps must use the component library built here — they
+  make no independent colour or typography decisions.
+
+- **Touches:** Tailwind config, global CSS, component library, layout
+  shell, landing page, home screens, consent screen, profile screen.
+
+- **How to test it:** Open the production URL on a real mobile device
+  (or Chrome DevTools at 390px width). The landing page loads with the
+  Round wordmark, teal brand colour, and both CTAs visible without
+  scrolling. Sign in: the home screen feels warm and oriented. Open
+  the profile: layout is readable, actions are clearly labelled. Open
+  an incognito window and tap "Try instantly": the anonymous home
+  displays the upgrade banner and "Reader #n" identity clearly. Resize
+  to desktop: nothing breaks.
+
+- **Definition of done:** Every screen from Steps 1–8 is visually
+  consistent with the design system. A new developer can build the
+  next feature by importing a component from the library without
+  writing any new CSS. The app looks credible on a mobile device.
+
 ## Phase 3 — Onboarding and Reading Plans
 
 ### Step 9 — Language and Bible version selection

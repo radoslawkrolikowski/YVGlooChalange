@@ -12,12 +12,14 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "@tailwindcss/postcss": "^4.3.2",
     "@youversion/platform-core": "^2.2.0",
     "drizzle-orm": "^0.45.2",
     "next": "^16.2.10",
     "pg": "^8.22.0",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.2"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
