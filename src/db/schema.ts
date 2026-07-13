@@ -1,4 +1,16 @@
-import { integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  integer,
+  pgSequence,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
+
+// Atomic counter behind Instant Access "Reader #n" display names (Step 8).
+// A sequence rather than a table row: anonymous visitors must never get a
+// database row of their own (brief §7), and nextval() is atomic by nature.
+export const anonReaderCounter = pgSequence("anon_reader_counter");
 
 export const appMeta = pgTable("app_meta", {
   key: text("key").primaryKey(),
