@@ -34,7 +34,7 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
         initial={reduced ? false : { opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1, ease: [0.22, 0.61, 0.36, 1] }}
-        className="flex flex-col gap-7"
+        className="relative z-10 flex flex-col gap-7"
       >
         <h1 className="font-serif text-4xl leading-[1.15] tracking-tight text-charcoal md:text-5xl">
           Some things are better read{" "}
@@ -70,9 +70,12 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
         initial={reduced ? false : { opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 1.4, ease: "easeOut" }}
-        className="relative aspect-[4/5] w-full md:aspect-auto md:h-[36rem]"
+        className="relative aspect-[4/5] w-full md:aspect-auto md:-ml-24 md:h-[36rem] md:w-[calc(100%+6rem)]"
         aria-hidden={verse ? undefined : true}
       >
+        {/* The image's own pixels dissolve before reaching the container's
+            left edge (CSS mask), so no hard cutoff exists for overlays to
+            hide — the mist SVG then makes the fade contour irregular. */}
         <Image
           src={heroImage}
           alt="Sunrise over a mountain river framed by a glowing circle of light"
@@ -81,6 +84,12 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
           placeholder="blur"
           sizes="(min-width: 768px) 50vw, 100vw"
           className="object-cover"
+          style={{
+            maskImage:
+              "linear-gradient(to right, transparent 0%, black 45%)",
+            WebkitMaskImage:
+              "linear-gradient(to right, transparent 0%, black 45%)",
+          }}
         />
         {/* Seamless dissolve into the page: an elliptical parchment vignette
             (no frame, no edge) plus a wider wash toward the text column. The
