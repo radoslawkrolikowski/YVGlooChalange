@@ -22,19 +22,24 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
     target: ref,
     offset: ["start start", "end start"],
   });
-  const drift = useTransform(scrollYProgress, [0, 1], [0, reduced ? 0 : 60]);
+  const drift = useTransform(scrollYProgress, [0, 1], [0, reduced ? 0 : -40]);
 
   return (
+    // Full-bleed hero: the section spans the viewport; only the text column
+    // is constrained. The image runs flush to the right edge of the browser.
     <section
       ref={ref}
-      className="mx-auto grid w-full max-w-6xl items-center gap-10 px-6 pb-20 pt-8 md:min-h-[calc(100dvh-5.5rem)] md:grid-cols-2 md:gap-6 md:pb-16 md:pt-0 lg:px-10"
+      className="relative w-full overflow-hidden pb-20 md:min-h-[calc(100dvh-5.5rem)] md:pb-0"
     >
-      {/* Left: headline and CTAs */}
+      {/* Left: headline and CTAs, inside the constrained content container.
+          The text block's max-width ends before the image's 45vw start line
+          (minus a buffer), so text never overlaps the image at any width:
+          45vw − container-left-offset (max(0px, 50vw − 36rem)) − 5rem. */}
       <motion.div
         initial={reduced ? false : { opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1, ease: [0.22, 0.61, 0.36, 1] }}
-        className="relative z-10 flex flex-col gap-7"
+        className="relative z-10 mx-auto flex max-w-6xl flex-col gap-7 px-6 pt-8 md:min-h-[calc(100dvh-5.5rem)] md:w-full md:justify-center md:pt-0 lg:px-10 md:[&>*]:max-w-[calc(45vw-max(0px,50vw-36rem)-5rem)]"
       >
         <h1 className="font-serif text-4xl leading-[1.15] tracking-tight text-charcoal md:text-5xl">
           Some things are better read{" "}
@@ -64,42 +69,35 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
         {error && <p className="text-sm text-danger">{error}</p>}
       </motion.div>
 
-      {/* Right: atmospheric hero image with the glowing Round ring motif */}
+      {/* Right: atmospheric hero image, flush to the viewport's right edge.
+          Extends 2.5rem below the section so the upward parallax drift never
+          reveals a gap; the section's overflow-hidden clips the excursion. */}
       <motion.div
         style={{ y: drift }}
         initial={reduced ? false : { opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 1.4, ease: "easeOut" }}
-        className="relative aspect-[4/5] w-full md:aspect-auto md:-ml-24 md:h-[36rem] md:w-[calc(100%+6rem)]"
+        className="relative mt-10 aspect-[4/5] w-full md:absolute md:-bottom-10 md:right-0 md:left-[45%] md:mt-0 md:aspect-auto md:top-0 md:w-auto"
         aria-hidden={verse ? undefined : true}
       >
-        {/* The image's own pixels dissolve before reaching the container's
-            left edge (CSS mask), so no hard cutoff exists for overlays to
-            hide — the mist SVG then makes the fade contour irregular. */}
+        {/* The image's own pixels dissolve at the left, top, and bottom via
+            composited CSS masks — no hard cutoff exists anywhere except the
+            flush right edge. The mist SVG makes the left contour irregular. */}
         <Image
           src={heroImage}
           alt="Sunrise over a mountain river framed by a glowing circle of light"
           fill
           priority
           placeholder="blur"
-          sizes="(min-width: 768px) 50vw, 100vw"
+          sizes="(min-width: 768px) 55vw, 100vw"
           className="object-cover"
           style={{
             maskImage:
-              "linear-gradient(to right, transparent 0%, black 45%)",
+              "linear-gradient(to right, transparent 0%, black 38%), linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%)",
+            maskComposite: "intersect",
             WebkitMaskImage:
-              "linear-gradient(to right, transparent 0%, black 45%)",
-          }}
-        />
-        {/* Seamless dissolve into the page: an elliptical parchment vignette
-            (no frame, no edge) plus a wider wash toward the text column. The
-            overlays match the page background exactly, so the image appears
-            to melt into mist rather than sit in a box. */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(ellipse 76% 66% at 56% 46%, transparent 57%, color-mix(in oklab, var(--color-parchment) 50%, transparent) 78%, var(--color-parchment) 99%)",
+              "linear-gradient(to right, transparent 0%, black 38%), linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%)",
+            WebkitMaskComposite: "source-in",
           }}
         />
         {/* Organic left contour: two blurred, irregular parchment silhouettes
@@ -134,17 +132,19 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
             filter="url(#mist-near)"
           />
         </svg>
-        <div className="absolute inset-x-0 top-0 h-1/6 bg-gradient-to-b from-parchment to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-parchment via-parchment/40 to-transparent" />
 
         {/* Scripture quote — fetched live from YouVersion, shown only when the
-            fetch succeeded. Rendering nothing beats rendering hardcoded text. */}
+            fetch succeeded. Rendering nothing beats rendering hardcoded text.
+            Sits above the bottom mask fade, on the dark water. */}
         {verse && (
-          <figure className="absolute inset-x-8 bottom-4 text-center">
-            <blockquote className="font-hand text-2xl leading-snug text-charcoal/80">
+          <figure className="absolute inset-x-8 bottom-16 text-center md:bottom-24">
+            <blockquote
+              className="font-hand text-2xl leading-snug text-gold-soft/95"
+              style={{ textShadow: "0 1px 14px rgba(15, 34, 30, 0.7)" }}
+            >
               “{verse.text}”
             </blockquote>
-            <figcaption className="mt-1 text-xs tracking-wide text-gold">
+            <figcaption className="mt-1 text-xs tracking-wide text-gold-soft/70">
               {verse.reference} · {verse.versionAbbreviation}
             </figcaption>
           </figure>
