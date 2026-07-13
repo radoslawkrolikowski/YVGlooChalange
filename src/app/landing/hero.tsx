@@ -90,12 +90,12 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(ellipse 72% 62% at 58% 46%, transparent 42%, color-mix(in oklab, var(--color-parchment) 55%, transparent) 74%, var(--color-parchment) 98%)",
+              "radial-gradient(ellipse 78% 68% at 56% 46%, transparent 58%, color-mix(in oklab, var(--color-parchment) 45%, transparent) 82%, var(--color-parchment) 100%)",
           }}
         />
-        <div className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-parchment via-parchment/50 to-transparent" />
-        <div className="absolute inset-x-0 top-0 h-1/4 bg-gradient-to-b from-parchment to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-parchment via-parchment/60 to-transparent" />
+        <div className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-parchment via-parchment/35 to-transparent" />
+        <div className="absolute inset-x-0 top-0 h-1/6 bg-gradient-to-b from-parchment to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-parchment via-parchment/40 to-transparent" />
 
         {/* Scripture quote — fetched live from YouVersion, shown only when the
             fetch succeeded. Rendering nothing beats rendering hardcoded text. */}
