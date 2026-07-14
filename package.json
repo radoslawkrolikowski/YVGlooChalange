@@ -15,8 +15,6 @@
     "@neondatabase/serverless": "^1.1.0",
     "@tailwindcss/postcss": "^4.3.2",
     "@youversion/platform-core": "^2.2.0",
-    "@youversion/platform-react-hooks": "^2.2.0",
-    "@youversion/platform-react-ui": "^2.2.0",
     "drizzle-orm": "^0.45.2",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.24.0",

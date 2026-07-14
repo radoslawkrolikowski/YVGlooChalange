@@ -5,8 +5,8 @@ import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import { useRef } from "react";
 import { useInstantAccess } from "@/lib/use-instant-access";
+import { useYouVersionSignIn } from "@/lib/use-youversion-sign-in";
 import heroImage from "@/assets/main_image_landing_page.png";
-import { SignInWithYouVersion } from "./youversion-auth-button";
 
 export interface HeroVerse {
   /** Verse text fetched live from YouVersion — never hardcoded. */
@@ -15,14 +15,9 @@ export interface HeroVerse {
   versionAbbreviation: string;
 }
 
-export function Hero({
-  verse,
-  appKey,
-}: {
-  verse: HeroVerse | null;
-  appKey: string;
-}) {
+export function Hero({ verse }: { verse: HeroVerse | null }) {
   const { enter, busy, error } = useInstantAccess();
+  const signIn = useYouVersionSignIn();
   const reduced = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
@@ -58,7 +53,14 @@ export function Hero({
           conversations become thoughtful, encouraging and consistent.
         </p>
         <div className="flex flex-wrap items-center gap-4">
-          <SignInWithYouVersion appKey={appKey} />
+          <button
+            type="button"
+            onClick={signIn.start}
+            disabled={signIn.busy}
+            className="rounded-full bg-forest px-7 py-3.5 text-base font-semibold text-ivory shadow-raised transition-all hover:-translate-y-0.5 hover:bg-forest-deep disabled:opacity-60"
+          >
+            {signIn.busy ? "Opening YouVersion…" : "Sign in with YouVersion"}
+          </button>
           <button
             type="button"
             onClick={enter}
@@ -74,7 +76,9 @@ export function Hero({
             See how it works <ArrowRight size={18} aria-hidden />
           </a>
         </div>
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {(error || signIn.error) && (
+          <p className="text-sm text-danger">{error ?? signIn.error}</p>
+        )}
       </motion.div>
 
       {/* Right: atmospheric hero image, flush to the viewport's right edge.
