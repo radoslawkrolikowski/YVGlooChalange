@@ -58,6 +58,8 @@ Non-negotiable constraints threaded through every step: all AI calls go through 
 
 **Escalation handling of flagged reflections (interpretation decision):** per the brief, "the flagged content is never shared with the circle." A flagged reflection is therefore saved as private to its author, is **not** posted to the circle thread, and is **excluded from Facilitator digest input**. The author sees their reflection normally plus the quiet support card; other members see nothing at all. Only the reflection's ID (never its content) is written to the audit log.
 
+**Visual identity: the landing page's warm editorial style is the canonical design language for the whole product — decided after Step 8A shipped, superseding 8A's teal palette.** The landing redesign (parchment/ivory surfaces, deep forest green as the primary brand colour, gold and sage accents, charcoal ink, Lora serif for display headings, Inter for body text, Caveat for rare handwritten accents, pill-shaped primary buttons) is the look the product leads with, and the app interior must feel like the same brand. Concretely: the design tokens in `globals.css` are re-pointed so the *brand* tokens (`--color-primary`, surfaces, etc.) resolve to the editorial palette (forest primary on parchment/ivory surfaces, gold accent) instead of teal `#1B6B6B`; the Step 8A component library keeps its component inventory and prop APIs but is re-skinned through those tokens. The teal palette is retired everywhere. Step 8B (below) performs the retrofit on all screens built before this decision; every step after 8B builds against the editorial tokens automatically because it composes from the same library. The token *names* stay stable so no downstream step's markup changes — only token values and component internals do.
+
 **Instant Access demo circle freshness: dynamically refreshed daily.** A daily cron job re-dates the demo circle's seeded reflections to look current and regenerates the digest, lesson summary, and conversation starters via **real Gloo calls** — so the demo circle always shows today's date and doubles as a standing live integration test of the agent pipeline. Anonymous visitors' reflections are stored as rows tagged with their anonymous session ID (necessary so they appear in the thread and pass through the Escalation Agent) and are pruned by the same daily job — honouring "no data persisted between sessions" while keeping the current session fully functional.
 
 ---
@@ -134,6 +136,12 @@ Non-negotiable constraints threaded through every step: all AI calls go through 
   on every screen built so far. This step produces no new features —
   it makes the existing ones look and feel like a real product.
 
+  *(Historical note: 8A shipped as specified below. Its teal palette was
+  later superseded by the landing page's editorial style — see the
+  visual-identity decision in the Decisions section and Step 8B, which
+  re-points these tokens. The component inventory and structure below
+  remain accurate.)*
+
   Design tokens (configured in Tailwind):
   - Primary: teal #1B6B6B with light (#E8F5F5) and dark (#134F4F)
     variants
@@ -200,14 +208,78 @@ Non-negotiable constraints threaded through every step: all AI calls go through 
   next feature by importing a component from the library without
   writing any new CSS. The app looks credible on a mobile device.
 
-### UI standard for all steps after 8A
+### Step 8B — Unify the app interior with the landing page's editorial style
 
-Step 8A delivered the design system, component library, and layout shell. Every subsequent step that adds or changes a screen ships that screen at **production visual quality in the same step** — there is no later "polish pass." Concretely, for every step below:
+- **What gets built:** The retrofit that executes the Decisions section's
+  visual-identity decision. This step produces no new features — it makes
+  every existing app-interior screen look like the same product as the
+  landing page.
 
-- All UI is composed from the Step 8A component library and design tokens; no step introduces its own colours, type sizes, or spacing values. New reusable patterns (e.g. bottom sheet, toast) are added *to the library*, then used.
+  Token re-point (in `globals.css` / Tailwind theme — the single source of
+  styling truth):
+  - `--color-primary` family: teal #1B6B6B → deep forest green
+    (`--color-forest` #16302A, dark variant #0F221E, with a light
+    parchment-tinted variant for soft backgrounds)
+  - Surfaces: white/`#f5f7fa` → ivory #FDFBF5 (cards) on parchment
+    #F6F1E7 (page background)
+  - Accent: gold #B8935A (with soft variant #ECDFC8) for highlights,
+    dividers, and selected states; sage #9AA88F / #E7EBE2 for calm
+    secondary fills
+  - Ink: charcoal-warm text colours replacing the cool grey ink scale
+  - Typography: Lora (serif) for screen titles and display headings,
+    Inter stays for body/UI text, Caveat reserved for rare devotional
+    accents (e.g. pull-quote verse treatments) — added to the type scale
+    as first-class tokens
+  - Buttons: primary becomes the landing's pill-shaped forest button
+    (rounded-full, hover lift); secondary/ghost/destructive re-skinned to
+    match. Radius/shadow tokens warmed to the landing's softer values.
+
+  Component library re-skin: every component in `src/components/ui`
+  (buttons, inputs, cards, avatar chip, badges, banners, skeletons, empty
+  states, dividers) and the layout shell (header, bottom nav) re-skinned
+  through the new token values. Component APIs, prop names, and the
+  component inventory do not change — downstream steps' markup is
+  untouched by design.
+
+  Screens retrofitted and verified: signed-in home, anonymous home,
+  profile (both variants), consent placeholder, plan placeholder, circles
+  placeholder, upgrade banner, sign-out affordances, and the dev Agent
+  Console. The landing page itself does not change — it is the reference.
+
+- **Why this step comes here:** The visual-identity decision was made
+  after 8A shipped with a teal palette the landing page then outgrew.
+  Retrofitting must happen before Phase 3 multiplies the screen count
+  (Steps 9–36 add ~28 screens); doing it at the token level now means
+  later steps inherit the editorial style for free, and no per-screen
+  cleanup step is ever needed.
+
+- **Touches:** `globals.css` tokens, Tailwind theme, `src/components/ui`
+  library, layout shell, all existing app-interior screens.
+
+- **How to test it:** Open the landing page and then sign in: the
+  transition from landing to home feels like moving deeper into the same
+  product, not switching apps — same palette, same button shapes, serif
+  headings. Walk every existing screen (home, profile, plan, circles,
+  consent, agent console) at 390px and desktop: no teal remains anywhere
+  (grep for `#1b6b6b` and the old teal token values returns nothing),
+  contrast on all text passes WCAG AA against the parchment/ivory
+  surfaces, and both session paths (signed-in and Instant Access) render
+  correctly.
+
+- **Definition of done:** Every existing screen renders in the landing
+  page's editorial style via re-pointed tokens, zero teal references
+  survive in code, and a new screen built from the component library
+  comes out editorial-styled with no extra styling decisions.
+
+### UI standard for all steps after 8B
+
+Step 8A delivered the component library and layout shell; Step 8B re-pointed its design tokens to the landing page's **editorial style** (parchment/ivory surfaces, forest-green primary, gold/sage accents, Lora serif display headings, pill primary buttons), which is the product's canonical design language per the Decisions section. Every subsequent step that adds or changes a screen ships that screen at **production visual quality in the same step** — there is no later "polish pass." Concretely, for every step below:
+
+- All UI is composed from the component library and the editorial design tokens; no step introduces its own colours, type sizes, or spacing values, and **no step reintroduces the retired teal palette**. New reusable patterns (e.g. bottom sheet, toast) are added *to the library* in the editorial style, then used.
+- Screen titles and display headings use the serif display face; body and UI text stay on the sans face — matching the landing page's typographic register.
 - Every screen ships with its non-happy-path states designed: loading (skeletons), empty (empty-state component), and error (banner) — never unstyled placeholders or raw JSON.
 - Everything is verified mobile-first (390px) and must not break at desktop widths.
-- Each step's **UI** bullet below is part of its definition of done: the step is not complete until its screens look like part of the same product as the Step 8A screens.
+- Each step's **UI** bullet below is part of its definition of done: the step is not complete until its screens look like part of the same product as the landing page and the Step 8B screens. Where a step's UI bullet below says "8A", read it as the 8B-retrofitted library — same components, editorial skin.
 
 ## Phase 3 — Onboarding and Reading Plans
 
