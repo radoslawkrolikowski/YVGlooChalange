@@ -1,12 +1,25 @@
 // Sign In with YouVersion — Step 6.
 //
 // NextAuth (Auth.js v5) with a custom YouVersion OAuth 2.0 provider. The
-// endpoint shapes mirror the official @youversion/platform-core SDK exactly
-// (src/SignInWithYouVersionPKCE.ts there): YouVersion is a PKCE public
-// client — the OAuth client_id is the platform app key and there is no
-// client secret; the token endpoint is authenticated by the PKCE verifier
-// alone. User identity comes from the ID token JWT (claims: sub, name,
-// profile_picture, email).
+// endpoints and PKCE flow mirror the official @youversion/platform-core SDK
+// (src/SignInWithYouVersionPKCE.ts there): YouVersion is a *public* client —
+// the OAuth client_id is the platform app key and there is no client secret;
+// PKCE + nonce + state secure the flow. User identity comes from the ID token
+// JWT (claims: sub, name, profile_picture, email).
+//
+// Endpoints deliberately use the api.youversion.com host, matching the SDK.
+// YouVersion does publish an OIDC discovery document, but it points at
+// login.youversion.com endpoints that return 404 and omits a userinfo
+// endpoint — Auth.js's OIDC/discovery path cannot consume it. A plain OAuth
+// provider with explicit endpoints avoids that entirely.
+//
+// `nonce` is in `checks` because YouVersion rejects any authorize request
+// whose scope includes `openid` without one ("nonce is required when scope
+// includes openid"). Auth.js generates and sends it for OAuth providers too.
+// The ID token is decoded (not signature-verified) for the profile, the same
+// trade-off the official SDK makes: the token arrives straight from
+// YouVersion's token endpoint over TLS in the same server request, and
+// YouVersion re-validates every token on its own API calls.
 //
 // Sessions are database-backed via the Drizzle adapter; the adapter's
 // (provider, providerAccountId) key is what guarantees "sign out, sign back
@@ -55,21 +68,24 @@ function decodeJwtPayload(token: string): YouVersionProfile {
 }
 
 function youVersionProvider(): OAuthConfig<YouVersionProfile> {
-  return {
+  const provider = {
     id: "youversion",
     name: "YouVersion",
     type: "oauth",
     clientId: youVersionClientId(),
     // Public client: PKCE only, no client secret.
     client: { token_endpoint_auth_method: "none" },
-    checks: ["pkce", "state"],
+    // `nonce` is generated and sent by Auth.js for any provider whose checks
+    // include it (verified in @auth/core checks.js); the OAuthConfig type only
+    // advertises it for OIDC providers, hence the cast on the return below.
+    checks: ["pkce", "state", "nonce"],
     authorization: {
       url: `https://${YOUVERSION_API_HOST}/auth/authorize`,
       params: { scope: "openid profile email" },
     },
     token: `https://${YOUVERSION_API_HOST}/auth/token`,
-    // No userinfo endpoint — identity is carried in the ID token returned by
-    // the token endpoint; decode it here instead of a second HTTP call.
+    // YouVersion has no userinfo endpoint — identity is carried in the ID
+    // token returned by the token endpoint; decode it here.
     userinfo: {
       url: `https://${YOUVERSION_API_HOST}/auth/token`,
       async request({ tokens }: { tokens: { id_token?: string } }) {
@@ -79,15 +95,16 @@ function youVersionProvider(): OAuthConfig<YouVersionProfile> {
         return decodeJwtPayload(tokens.id_token);
       },
     },
-    profile(profile) {
+    profile(profile: YouVersionProfile) {
       return {
         id: profile.sub,
-        name: profile.name ?? `YouVersion reader`,
+        name: profile.name ?? "YouVersion reader",
         email: profile.email ?? null,
         image: profile.profile_picture ?? null,
       };
     },
   };
+  return provider as OAuthConfig<YouVersionProfile>;
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
