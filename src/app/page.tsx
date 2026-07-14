@@ -1,5 +1,6 @@
 import { fetchPassage } from "@/lib/youversion";
 import { LICENSED_FALLBACK_BY_LANGUAGE } from "@/config/bible-versions";
+import { auth } from "@/lib/auth";
 import { Hero, type HeroVerse } from "./landing/hero";
 import { LandingNav } from "./landing/nav";
 import {
@@ -62,12 +63,17 @@ export default async function Home({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  const [verse, params] = await Promise.all([heroVerse(), searchParams]);
+  const [verse, params, session] = await Promise.all([
+    heroVerse(),
+    searchParams,
+    auth(),
+  ]);
   const signInError = params.error ? signInErrorMessage(params.error) : null;
+  const authenticated = Boolean(session?.user);
 
   return (
     <div className="min-h-dvh bg-parchment text-charcoal">
-      <LandingNav />
+      <LandingNav authenticated={authenticated} />
       <main>
         {signInError && (
           <div className="mx-auto w-full max-w-6xl px-6 lg:px-10" role="alert">
@@ -76,12 +82,12 @@ export default async function Home({
             </p>
           </div>
         )}
-        <Hero verse={verse} />
+        <Hero verse={verse} authenticated={authenticated} />
         <ValueProps />
         <HowItWorks />
         <AiTeam />
         <SocialProof />
-        <FinalCta />
+        <FinalCta authenticated={authenticated} />
       </main>
       <footer className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 pb-10 text-xs text-charcoal/45 lg:px-10">
         <span>Round — Scripture reading circles</span>

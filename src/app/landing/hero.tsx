@@ -3,6 +3,7 @@
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRef } from "react";
 import { useInstantAccess } from "@/lib/use-instant-access";
 import { useYouVersionSignIn } from "@/lib/use-youversion-sign-in";
@@ -15,7 +16,13 @@ export interface HeroVerse {
   versionAbbreviation: string;
 }
 
-export function Hero({ verse }: { verse: HeroVerse | null }) {
+export function Hero({
+  verse,
+  authenticated,
+}: {
+  verse: HeroVerse | null;
+  authenticated: boolean;
+}) {
   const { enter, busy, error } = useInstantAccess();
   const signIn = useYouVersionSignIn();
   const reduced = useReducedMotion();
@@ -53,22 +60,33 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
           conversations become thoughtful, encouraging and consistent.
         </p>
         <div className="flex flex-wrap items-center gap-4">
-          <button
-            type="button"
-            onClick={signIn.start}
-            disabled={signIn.busy}
-            className="rounded-full bg-forest px-7 py-3.5 text-base font-semibold text-ivory shadow-raised transition-all hover:-translate-y-0.5 hover:bg-forest-deep disabled:opacity-60"
-          >
-            {signIn.busy ? "Opening YouVersion…" : "Sign in with YouVersion"}
-          </button>
-          <button
-            type="button"
-            onClick={enter}
-            disabled={busy}
-            className="rounded-full border border-forest/50 px-7 py-3.5 text-base font-semibold text-forest transition-all hover:-translate-y-0.5 hover:bg-sage-soft disabled:opacity-60"
-          >
-            {busy ? "Entering…" : "Try instantly"}
-          </button>
+          {authenticated ? (
+            <Link
+              href="/home"
+              className="rounded-full bg-forest px-7 py-3.5 text-base font-semibold text-ivory shadow-raised transition-all hover:-translate-y-0.5 hover:bg-forest-deep"
+            >
+              Continue to Round
+            </Link>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={signIn.start}
+                disabled={signIn.busy}
+                className="rounded-full bg-forest px-7 py-3.5 text-base font-semibold text-ivory shadow-raised transition-all hover:-translate-y-0.5 hover:bg-forest-deep disabled:opacity-60"
+              >
+                {signIn.busy ? "Opening YouVersion…" : "Sign in with YouVersion"}
+              </button>
+              <button
+                type="button"
+                onClick={enter}
+                disabled={busy}
+                className="rounded-full border border-forest/50 px-7 py-3.5 text-base font-semibold text-forest transition-all hover:-translate-y-0.5 hover:bg-sage-soft disabled:opacity-60"
+              >
+                {busy ? "Entering…" : "Try instantly"}
+              </button>
+            </>
+          )}
           <a
             href="#how-it-works"
             className="inline-flex items-center gap-2 text-base font-medium text-forest transition-colors hover:text-forest-deep"
@@ -76,7 +94,7 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
             See how it works <ArrowRight size={18} aria-hidden />
           </a>
         </div>
-        {(error || signIn.error) && (
+        {!authenticated && (error || signIn.error) && (
           <p className="text-sm text-danger">{error ?? signIn.error}</p>
         )}
       </motion.div>

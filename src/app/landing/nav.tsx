@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Wordmark } from "@/components/layout/wordmark";
 import { useYouVersionSignIn } from "@/lib/use-youversion-sign-in";
 
@@ -9,7 +10,10 @@ const links = [
   { href: "#ai-team", label: "About" },
 ] as const;
 
-export function LandingNav() {
+const ctaClass =
+  "rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-ivory transition-colors hover:bg-forest-deep disabled:opacity-60";
+
+export function LandingNav({ authenticated }: { authenticated: boolean }) {
   const { start, busy } = useYouVersionSignIn();
 
   return (
@@ -26,14 +30,15 @@ export function LandingNav() {
           </a>
         ))}
       </nav>
-      <button
-        type="button"
-        onClick={start}
-        disabled={busy}
-        className="rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-ivory transition-colors hover:bg-forest-deep disabled:opacity-60"
-      >
-        {busy ? "Opening…" : "Sign in"}
-      </button>
+      {authenticated ? (
+        <Link href="/home" className={ctaClass}>
+          Open Round
+        </Link>
+      ) : (
+        <button type="button" onClick={start} disabled={busy} className={ctaClass}>
+          {busy ? "Opening…" : "Sign in"}
+        </button>
+      )}
     </header>
   );
 }
