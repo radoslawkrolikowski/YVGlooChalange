@@ -72,6 +72,11 @@ function youVersionProvider(): OAuthConfig<YouVersionProfile> {
     id: "youversion",
     name: "YouVersion",
     type: "oauth",
+    // YouVersion returns an ID token in the token response, and Auth.js /
+    // oauth4webapi validate its claims when present. `issuer` must equal the
+    // token's `iss` (this exact value) or the `iss` check fails; without it,
+    // Auth.js defaults the expected issuer to authjs.dev and rejects sign-in.
+    issuer: "https://api.youversion.com/auth/token",
     clientId: youVersionClientId(),
     // Public client: PKCE only, no client secret.
     client: { token_endpoint_auth_method: "none" },
