@@ -76,7 +76,7 @@ export default async function Home({
             </p>
           </div>
         )}
-        <Hero verse={verse} />
+        <Hero verse={verse} appKey={process.env.YOUVERSION_API_KEY ?? ""} />
         <ValueProps />
         <HowItWorks />
         <AiTeam />
