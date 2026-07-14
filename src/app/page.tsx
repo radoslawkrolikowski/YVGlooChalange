@@ -41,13 +41,41 @@ async function heroVerse(): Promise<HeroVerse | null> {
   }
 }
 
-export default async function Home() {
-  const verse = await heroVerse();
+// NextAuth redirects sign-in failures back here with ?error=<code> (the
+// error "page" is the landing page, per the step spec: an error banner,
+// never a raw error page). Codes are mapped to friendly copy.
+function signInErrorMessage(code: string): string {
+  switch (code) {
+    case "OAuthAccountNotLinked":
+      return "This YouVersion account is already linked to a different Round profile. Try signing in the way you did before.";
+    case "AccessDenied":
+      return "Sign-in was cancelled. You can try again whenever you're ready.";
+    case "Configuration":
+      return "Sign-in isn't configured correctly on our side. Please try again later.";
+    default:
+      return "We couldn't complete your YouVersion sign-in. Please try again.";
+  }
+}
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const [verse, params] = await Promise.all([heroVerse(), searchParams]);
+  const signInError = params.error ? signInErrorMessage(params.error) : null;
 
   return (
     <div className="min-h-dvh bg-parchment text-charcoal">
       <LandingNav />
       <main>
+        {signInError && (
+          <div className="mx-auto w-full max-w-6xl px-6 lg:px-10" role="alert">
+            <p className="rounded-2xl border border-danger/25 bg-danger-soft px-5 py-3.5 text-sm font-medium text-danger">
+              {signInError}
+            </p>
+          </div>
+        )}
         <Hero verse={verse} />
         <ValueProps />
         <HowItWorks />

@@ -3,21 +3,30 @@
 import { Avatar, Badge, Button, Card, SectionHeader } from "@/components/ui";
 import { findSupportedVersion } from "@/config/bible-versions";
 
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: "English",
+  es: "Spanish",
+  pt: "Portuguese",
+};
+
 /*
- * Shared home screen layout (Step 8A). Rendered for anonymous sessions now;
- * the signed-in home (Step 6) reuses it with the user's YouVersion display
- * name and no upgrade banner — same layout, per the step spec.
+ * Shared home screen layout (Steps 6 + 8A). Rendered for both session paths:
+ * anonymous sessions arrive with their defaults; signed-in users' language
+ * and version are null until onboarding (Step 9) sets them.
  */
 export function HomeScreen({
   displayName,
+  language,
   bibleVersionId,
   isAnonymous,
 }: {
   displayName: string;
-  bibleVersionId: number;
+  language: string | null;
+  bibleVersionId: number | null;
   isAnonymous: boolean;
 }) {
-  const version = findSupportedVersion(bibleVersionId);
+  const version =
+    bibleVersionId === null ? null : findSupportedVersion(bibleVersionId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -50,14 +59,35 @@ export function HomeScreen({
         <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm">
           <dt className="text-ink-faint">Language</dt>
           <dd className="font-medium text-ink">
-            English {isAnonymous && <span className="text-ink-faint">(default)</span>}
+            {language ? (
+              <>
+                {LANGUAGE_NAMES[language] ?? language}{" "}
+                {isAnonymous && (
+                  <span className="text-ink-faint">(default)</span>
+                )}
+              </>
+            ) : (
+              <span className="text-ink-faint">
+                Choose during onboarding — coming soon
+              </span>
+            )}
           </dd>
           <dt className="text-ink-faint">Bible version</dt>
           <dd className="font-medium text-ink">
-            {version
-              ? `${version.abbreviation} — ${version.title}`
-              : `Version ${bibleVersionId}`}{" "}
-            {isAnonymous && <span className="text-ink-faint">(default)</span>}
+            {bibleVersionId === null ? (
+              <span className="text-ink-faint">
+                Choose during onboarding — coming soon
+              </span>
+            ) : (
+              <>
+                {version
+                  ? `${version.abbreviation} — ${version.title}`
+                  : `Version ${bibleVersionId}`}{" "}
+                {isAnonymous && (
+                  <span className="text-ink-faint">(default)</span>
+                )}
+              </>
+            )}
           </dd>
         </dl>
       </Card>

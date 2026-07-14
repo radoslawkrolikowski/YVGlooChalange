@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 import { useRef } from "react";
 import { useInstantAccess } from "@/lib/use-instant-access";
+import { useYouVersionSignIn } from "@/lib/use-youversion-sign-in";
 import heroImage from "@/assets/main_image_landing_page.png";
 
 export interface HeroVerse {
@@ -16,6 +17,7 @@ export interface HeroVerse {
 
 export function Hero({ verse }: { verse: HeroVerse | null }) {
   const { enter, busy, error } = useInstantAccess();
+  const signIn = useYouVersionSignIn();
   const reduced = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
@@ -53,11 +55,19 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
         <div className="flex flex-wrap items-center gap-4">
           <button
             type="button"
-            onClick={enter}
-            disabled={busy}
+            onClick={signIn.start}
+            disabled={signIn.busy}
             className="rounded-full bg-forest px-7 py-3.5 text-base font-semibold text-ivory shadow-raised transition-all hover:-translate-y-0.5 hover:bg-forest-deep disabled:opacity-60"
           >
-            {busy ? "Entering…" : "Try Round"}
+            {signIn.busy ? "Opening YouVersion…" : "Sign in with YouVersion"}
+          </button>
+          <button
+            type="button"
+            onClick={enter}
+            disabled={busy}
+            className="rounded-full border border-forest/50 px-7 py-3.5 text-base font-semibold text-forest transition-all hover:-translate-y-0.5 hover:bg-sage-soft disabled:opacity-60"
+          >
+            {busy ? "Entering…" : "Try instantly"}
           </button>
           <a
             href="#how-it-works"
@@ -66,7 +76,9 @@ export function Hero({ verse }: { verse: HeroVerse | null }) {
             See how it works <ArrowRight size={18} aria-hidden />
           </a>
         </div>
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {(error || signIn.error) && (
+          <p className="text-sm text-danger">{error ?? signIn.error}</p>
+        )}
       </motion.div>
 
       {/* Right: atmospheric hero image, flush to the viewport's right edge.

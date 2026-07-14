@@ -1,7 +1,7 @@
 "use client";
 
 import { Wordmark } from "@/components/layout/wordmark";
-import { useInstantAccess } from "@/lib/use-instant-access";
+import { useYouVersionSignIn } from "@/lib/use-youversion-sign-in";
 
 const links = [
   { href: "#how-it-works", label: "How it works" },
@@ -10,7 +10,7 @@ const links = [
 ] as const;
 
 export function LandingNav() {
-  const { enter, busy } = useInstantAccess();
+  const { start, busy } = useYouVersionSignIn();
 
   return (
     <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5 lg:px-10">
@@ -28,11 +28,11 @@ export function LandingNav() {
       </nav>
       <button
         type="button"
-        onClick={enter}
+        onClick={start}
         disabled={busy}
         className="rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-ivory transition-colors hover:bg-forest-deep disabled:opacity-60"
       >
-        {busy ? "Entering…" : "Try Round"}
+        {busy ? "Opening…" : "Sign in"}
       </button>
     </header>
   );
