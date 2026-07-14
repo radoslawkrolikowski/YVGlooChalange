@@ -2,6 +2,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { auth } from "@/lib/auth";
 import { AnonHome } from "./anon-home";
 import { HomeScreen } from "./home-screen";
+import { SignOutButton } from "./sign-out-button";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function HomePage() {
 
   if (session?.user) {
     return (
-      <AppShell>
+      <AppShell headerAction={<SignOutButton />}>
         <HomeScreen
           displayName={session.user.name ?? "YouVersion reader"}
           language={session.user.language}
