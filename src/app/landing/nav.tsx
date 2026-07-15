@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { Wordmark } from "@/components/layout/wordmark";
-import { useInstantAccess } from "@/lib/use-instant-access";
+import { useYouVersionSignIn } from "@/lib/use-youversion-sign-in";
 
 const links = [
   { href: "#how-it-works", label: "How it works" },
@@ -9,8 +10,11 @@ const links = [
   { href: "#ai-team", label: "About" },
 ] as const;
 
-export function LandingNav() {
-  const { enter, busy } = useInstantAccess();
+const ctaClass =
+  "rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-ivory transition-colors hover:bg-forest-deep disabled:opacity-60";
+
+export function LandingNav({ authenticated }: { authenticated: boolean }) {
+  const { start, busy } = useYouVersionSignIn();
 
   return (
     <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5 lg:px-10">
@@ -26,14 +30,15 @@ export function LandingNav() {
           </a>
         ))}
       </nav>
-      <button
-        type="button"
-        onClick={enter}
-        disabled={busy}
-        className="rounded-full bg-forest px-5 py-2.5 text-sm font-semibold text-ivory transition-colors hover:bg-forest-deep disabled:opacity-60"
-      >
-        {busy ? "Entering…" : "Try Round"}
-      </button>
+      {authenticated ? (
+        <Link href="/home" className={ctaClass}>
+          Open Round
+        </Link>
+      ) : (
+        <button type="button" onClick={start} disabled={busy} className={ctaClass}>
+          {busy ? "Opening…" : "Sign in"}
+        </button>
+      )}
     </header>
   );
 }

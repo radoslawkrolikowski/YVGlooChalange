@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui";
+import { useYouVersionSignIn } from "@/lib/use-youversion-sign-in";
 
 export const ANON_TOKEN_STORAGE_KEY = "round.anonSessionToken";
 
@@ -39,22 +40,17 @@ export function InstantAccessButton() {
   );
 }
 
-// Path A's primary CTA. The real YouVersion OAuth flow is Step 6 (currently
-// deferred) — until it lands, tapping explains that instead of redirecting.
+// Path A's primary CTA (Step 6): starts the real YouVersion OAuth flow. The
+// busy label doubles as the loading state while the redirect happens.
 export function SignInButton() {
-  const [note, setNote] = useState(false);
+  const { start, busy, error } = useYouVersionSignIn();
 
   return (
     <div className="flex flex-col gap-2">
-      <Button full onClick={() => setNote(true)}>
-        Sign in with YouVersion
+      <Button full onClick={start} disabled={busy}>
+        {busy ? "Opening YouVersion…" : "Sign in with YouVersion"}
       </Button>
-      {note && (
-        <p className="text-center text-sm text-ink-soft">
-          Sign-in with YouVersion is coming soon (Step 6). Try Round instantly
-          below in the meantime.
-        </p>
-      )}
+      {error && <p className="text-center text-sm text-danger">{error}</p>}
     </div>
   );
 }

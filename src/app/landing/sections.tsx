@@ -13,6 +13,7 @@ import {
   UserRoundPlus,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 import { useInstantAccess } from "@/lib/use-instant-access";
 import { FadeUp } from "./motion";
 
@@ -218,7 +219,7 @@ export function SocialProof() {
 
 /* ---------- Final CTA ---------- */
 
-export function FinalCta() {
+export function FinalCta({ authenticated }: { authenticated: boolean }) {
   const { enter, busy, error } = useInstantAccess();
 
   return (
@@ -228,19 +229,30 @@ export function FinalCta() {
           <h2 className="max-w-xl font-serif text-3xl leading-snug text-charcoal md:text-4xl">
             Your next Bible study starts with one conversation.
           </h2>
-          <button
-            type="button"
-            onClick={enter}
-            disabled={busy}
-            className="rounded-full bg-forest px-8 py-4 text-base font-semibold text-ivory shadow-raised transition-all hover:-translate-y-0.5 hover:bg-forest-deep disabled:opacity-60"
-          >
-            {busy ? "Entering…" : "Start Reading Together"}
-          </button>
-          {error && <p className="text-sm text-danger">{error}</p>}
-          <p className="text-xs text-charcoal/50">
-            No form, no account needed to try. Nothing is saved after you close
-            the browser.
-          </p>
+          {authenticated ? (
+            <Link
+              href="/home"
+              className="rounded-full bg-forest px-8 py-4 text-base font-semibold text-ivory shadow-raised transition-all hover:-translate-y-0.5 hover:bg-forest-deep"
+            >
+              Continue to Round
+            </Link>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={enter}
+                disabled={busy}
+                className="rounded-full bg-forest px-8 py-4 text-base font-semibold text-ivory shadow-raised transition-all hover:-translate-y-0.5 hover:bg-forest-deep disabled:opacity-60"
+              >
+                {busy ? "Entering…" : "Start Reading Together"}
+              </button>
+              {error && <p className="text-sm text-danger">{error}</p>}
+              <p className="text-xs text-charcoal/50">
+                No form, no account needed to try. Nothing is saved after you
+                close the browser.
+              </p>
+            </>
+          )}
         </div>
       </FadeUp>
     </section>

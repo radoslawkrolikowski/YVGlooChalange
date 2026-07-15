@@ -6,6 +6,7 @@
 // are built against this union, so Instant Access is first-class by
 // construction, never bolted on.
 
+import { auth } from "./auth";
 import { verifyAnonSessionToken, type AnonSession } from "./anon-session";
 
 export type { AnonSession };
@@ -29,14 +30,23 @@ export const ANON_SESSION_HEADER = "x-round-session";
  * Resolves the request's session: an authenticated user, an anonymous
  * session, or null (no session at all).
  *
- * The authenticated branch is wired up in Step 6 (NextAuth, currently
- * deferred); until then only anonymous sessions resolve, but callers already
- * handle the full union so no route changes when Step 6 lands.
+ * Path A (NextAuth cookie session) is checked first; a signed-in user with a
+ * stale anonymous token in the browser is still the signed-in user.
  */
 export async function resolveSession(
   request: Request,
 ): Promise<Session | null> {
-  // Step 6: check the NextAuth cookie session here first (Path A).
+  const nextAuthSession = await auth();
+  if (nextAuthSession?.user) {
+    const { user } = nextAuthSession;
+    return {
+      kind: "user",
+      userId: user.id,
+      displayName: user.name ?? "YouVersion reader",
+      language: user.language,
+      bibleVersionId: user.bibleVersionId,
+    };
+  }
 
   const token = request.headers.get(ANON_SESSION_HEADER);
   if (token) {

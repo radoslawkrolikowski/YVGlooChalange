@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useYouVersionSignIn } from "@/lib/use-youversion-sign-in";
 
 // Step 8: the persistent upgrade affordance for anonymous sessions, pinned
-// above the header on every app screen. The actual YouVersion OAuth flow is
-// Step 6 (currently deferred) — tapping explains that until it lands.
+// above the header on every app screen. Since Step 6 it starts the real
+// YouVersion OAuth flow (the anonymous token is discarded on tap — Path A
+// takes over from there).
 export function UpgradeBanner() {
-  const [note, setNote] = useState(false);
+  const { start, busy, error } = useYouVersionSignIn();
 
   return (
     <aside className="sticky top-0 z-20 bg-primary-dark px-4 py-2.5 text-sm text-white">
@@ -14,17 +15,13 @@ export function UpgradeBanner() {
         <span>Save your progress —</span>
         <button
           type="button"
-          onClick={() => setNote(true)}
-          className="font-semibold underline underline-offset-2 hover:text-primary-light"
+          onClick={start}
+          disabled={busy}
+          className="font-semibold underline underline-offset-2 hover:text-primary-light disabled:opacity-70"
         >
-          Sign in with YouVersion
+          {busy ? "Opening YouVersion…" : "Sign in with YouVersion"}
         </button>
-        {note && (
-          <p className="w-full text-xs text-primary-light">
-            Sign-in with YouVersion is coming soon (Step 6). Your current
-            session stays anonymous.
-          </p>
-        )}
+        {error && <p className="w-full text-xs text-primary-light">{error}</p>}
       </div>
     </aside>
   );
