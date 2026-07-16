@@ -65,7 +65,7 @@ export function AnonProfile() {
         <ReadingSettingsCard
           language={session.language}
           bibleVersionId={session.bibleVersionId}
-          isAnonymous
+          isAnonymous={!session.onboarded}
         />
 
         <Card className="flex flex-col gap-3">

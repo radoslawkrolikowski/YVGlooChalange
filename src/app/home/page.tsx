@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { HeaderMenu } from "@/components/layout/header-menu";
 import { AppShell } from "@/components/layout/app-shell";
 import { auth } from "@/lib/auth";
@@ -13,6 +14,9 @@ export default async function HomePage() {
   const session = await auth();
 
   if (session?.user) {
+    // Path A completes onboarding before Home: language drives every passage
+    // fetch and translation target (Step 9).
+    if (session.user.language === null) redirect("/onboarding");
     const displayName = session.user.name ?? "YouVersion reader";
     return (
       <AppShell
