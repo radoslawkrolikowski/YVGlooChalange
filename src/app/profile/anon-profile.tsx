@@ -1,8 +1,10 @@
 "use client";
 
+import { Highlighter, KeyRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
+import { HeaderMenu } from "@/components/layout/header-menu";
 import {
   Avatar,
   Badge,
@@ -10,17 +12,19 @@ import {
   Button,
   Card,
   Divider,
-  SectionHeader,
-  SkeletonText,
+  SectionLabel,
 } from "@/components/ui";
 import { clearAnonSession, useAnonSession } from "@/lib/use-anon-session";
+import { HomeSkeleton } from "../home/home-skeleton";
 import { UpgradeBanner } from "../home/upgrade-banner";
+import { ReadingSettingsCard } from "./reading-settings-card";
 
 /*
- * Anonymous profile (Steps 8/8A). Shows the session identity and a working
- * "End session" action. The highlights section renders the production layout
- * — count, revoke with a confirmation step — fed by real data once Step 7
- * lands.
+ * Anonymous profile (Steps 8/8A, recomposed in Step 8C): identity header,
+ * reading settings (moved from Home, "(default)" annotation), highlights,
+ * and session — in the Home screen's register. The highlights section
+ * renders the production layout — count, revoke with a confirmation step —
+ * fed by real data once Step 7 lands.
  */
 export function AnonProfile() {
   const router = useRouter();
@@ -29,8 +33,8 @@ export function AnonProfile() {
 
   if (!session) {
     return (
-      <AppShell>
-        <SkeletonText lines={4} />
+      <AppShell banner={<UpgradeBanner />}>
+        <HomeSkeleton />
       </AppShell>
     );
   }
@@ -41,11 +45,16 @@ export function AnonProfile() {
   }
 
   return (
-    <AppShell banner={<UpgradeBanner />}>
+    <AppShell
+      banner={<UpgradeBanner />}
+      headerAction={
+        <HeaderMenu displayName={session.displayName} isAnonymous />
+      }
+    >
       <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <Avatar name={session.displayName} size="lg" />
-          <div>
+          <div className="flex flex-col items-start gap-1">
             <h1 className="font-serif text-2xl font-semibold tracking-tight text-ink">
               {session.displayName}
             </h1>
@@ -53,8 +62,19 @@ export function AnonProfile() {
           </div>
         </div>
 
+        <ReadingSettingsCard
+          language={session.language}
+          bibleVersionId={session.bibleVersionId}
+          isAnonymous
+        />
+
         <Card className="flex flex-col gap-3">
-          <SectionHeader title="Imported highlights" />
+          <SectionLabel icon={<Highlighter size={14} aria-hidden />}>
+            Highlights
+          </SectionLabel>
+          <h2 className="font-serif text-lg font-semibold tracking-tight text-ink">
+            Imported highlights
+          </h2>
           <p className="text-2xl font-bold text-ink">
             0 <span className="text-sm font-normal text-ink-soft">highlights</span>
           </p>
@@ -90,7 +110,12 @@ export function AnonProfile() {
         </Card>
 
         <Card className="flex flex-col gap-3">
-          <SectionHeader title="Session" />
+          <SectionLabel icon={<KeyRound size={14} aria-hidden />}>
+            Session
+          </SectionLabel>
+          <h2 className="font-serif text-lg font-semibold tracking-tight text-ink">
+            Anonymous session
+          </h2>
           <p className="text-sm text-ink-soft">
             You are browsing anonymously. Ending the session discards
             everything — nothing is stored.

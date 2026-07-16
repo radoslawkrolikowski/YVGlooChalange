@@ -1,8 +1,10 @@
 "use client";
 
+import { Highlighter, KeyRound } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
+import { HeaderMenu } from "@/components/layout/header-menu";
 import {
   Avatar,
   Badge,
@@ -10,15 +12,26 @@ import {
   Button,
   Card,
   Divider,
-  SectionHeader,
+  SectionLabel,
 } from "@/components/ui";
+import { ReadingSettingsCard } from "./reading-settings-card";
 
 /*
- * Signed-in profile (Step 6): YouVersion identity plus the styled sign-out
- * action. The highlights section keeps the 8A production layout with an
- * explanatory empty state until Step 7 imports real highlights.
+ * Signed-in profile (Step 6, recomposed in Step 8C): identity header,
+ * reading settings (moved from Home), imported highlights, and account —
+ * all in the Home screen's register (icon-chip labels, serif headings).
+ * The highlights section keeps the production layout with an explanatory
+ * empty state until Step 7 imports real highlights.
  */
-export function UserProfile({ displayName }: { displayName: string }) {
+export function UserProfile({
+  displayName,
+  language,
+  bibleVersionId,
+}: {
+  displayName: string;
+  language: string | null;
+  bibleVersionId: number | null;
+}) {
   const [confirmingRevoke, setConfirmingRevoke] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
@@ -32,11 +45,13 @@ export function UserProfile({ displayName }: { displayName: string }) {
   }
 
   return (
-    <AppShell>
+    <AppShell
+      headerAction={<HeaderMenu displayName={displayName} isAnonymous={false} />}
+    >
       <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <Avatar name={displayName} size="lg" />
-          <div>
+          <div className="flex flex-col items-start gap-1">
             <h1 className="font-serif text-2xl font-semibold tracking-tight text-ink">
               {displayName}
             </h1>
@@ -44,13 +59,24 @@ export function UserProfile({ displayName }: { displayName: string }) {
           </div>
         </div>
 
+        <ReadingSettingsCard
+          language={language}
+          bibleVersionId={bibleVersionId}
+          isAnonymous={false}
+        />
+
         <Card className="flex flex-col gap-3">
-          <SectionHeader title="Imported highlights" />
+          <SectionLabel icon={<Highlighter size={14} aria-hidden />}>
+            Highlights
+          </SectionLabel>
+          <h2 className="font-serif text-lg font-semibold tracking-tight text-ink">
+            Imported highlights
+          </h2>
           <p className="text-2xl font-bold text-ink">
             0 <span className="text-sm font-normal text-ink-soft">highlights</span>
           </p>
           <p className="text-sm text-ink-soft">
-            Highlight import arrives with the next update. You'll choose
+            Highlight import arrives with the next update. You&rsquo;ll choose
             exactly what is imported and why before anything is stored.
           </p>
           <Divider />
@@ -81,9 +107,14 @@ export function UserProfile({ displayName }: { displayName: string }) {
         </Card>
 
         <Card className="flex flex-col gap-3">
-          <SectionHeader title="Account" />
+          <SectionLabel icon={<KeyRound size={14} aria-hidden />}>
+            Account
+          </SectionLabel>
+          <h2 className="font-serif text-lg font-semibold tracking-tight text-ink">
+            Your account
+          </h2>
           <p className="text-sm text-ink-soft">
-            You're signed in with YouVersion. Your circles, plans, and
+            You&rsquo;re signed in with YouVersion. Your circles, plans, and
             highlights stay saved between visits.
           </p>
           <Button

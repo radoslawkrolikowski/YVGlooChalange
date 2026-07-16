@@ -5,10 +5,14 @@ import { usePathname } from "next/navigation";
 import { Wordmark } from "./wordmark";
 
 /*
- * Mobile-first layout shell (Step 8A): safe-area-aware page wrapper, top
- * header bar (logo left, action right), scrollable content area, bottom
- * navigation. All app-interior screens render inside this shell; the
- * landing page does not (it has no navigation yet).
+ * Responsive layout shell (Step 8A, made responsive in Step 8C).
+ *
+ * Mobile (<768px): top header (wordmark left, actions right), bottom tab
+ * bar, single column — unchanged from 8A. Desktop (≥768px): the bottom tab
+ * bar hides, the four nav links render inline in the header with an active
+ * state, and the content column widens from max-w-lg to max-w-3xl with the
+ * same card composition. All app-interior screens render inside this shell;
+ * the landing page does not.
  */
 
 const tabs = [
@@ -17,6 +21,10 @@ const tabs = [
   { href: "/circles", label: "Circles", icon: CirclesIcon },
   { href: "/profile", label: "Profile", icon: ProfileIcon },
 ] as const;
+
+function isActive(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function AppShell({
   headerAction,
@@ -30,28 +38,57 @@ export function AppShell({
   const pathname = usePathname();
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-lg flex-col bg-surface-soft">
+    <div className="flex min-h-dvh flex-col bg-surface-soft">
       {banner}
       <header
-        className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface px-4 py-3"
-        style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
+        className="sticky top-0 z-10 border-b border-line bg-surface px-4"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
-        <Link href="/home" aria-label="Round home">
-          <Wordmark />
-        </Link>
-        {headerAction}
+        <div className="mx-auto flex max-w-lg items-center justify-between gap-4 py-3 md:max-w-3xl">
+          <Link href="/home" aria-label="Round home">
+            <Wordmark />
+          </Link>
+
+          {/* Desktop-only inline navigation; mobile keeps the bottom tabs. */}
+          <nav aria-label="Main navigation" className="hidden items-center gap-1 md:flex">
+            {tabs.map(({ href, label }) => {
+              const active = isActive(pathname, href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                    active
+                      ? "bg-primary-light text-primary-dark"
+                      : "text-ink-soft hover:bg-sage-soft hover:text-ink"
+                  }`}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="flex items-center gap-2">
+            {/* Step 29's notification bell lands here, left of the action. */}
+            {headerAction}
+          </div>
+        </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-4 py-5 pb-24">{children}</main>
+      <main className="flex-1 overflow-y-auto px-4 py-5 pb-24 md:pb-8">
+        <div className="mx-auto w-full max-w-lg md:max-w-3xl">{children}</div>
+      </main>
 
       <nav
         aria-label="Main navigation"
-        className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-surface"
+        className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-surface md:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="mx-auto flex max-w-lg">
           {tabs.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || pathname.startsWith(`${href}/`);
+            const active = isActive(pathname, href);
             return (
               <Link
                 key={href}

@@ -11,7 +11,7 @@ export function UpgradeBanner() {
 
   return (
     <aside className="sticky top-0 z-20 bg-primary-dark px-4 py-2.5 text-sm text-ivory">
-      <div className="mx-auto flex max-w-lg flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <div className="mx-auto flex max-w-lg flex-wrap items-center justify-between gap-x-3 gap-y-1 md:max-w-3xl">
         <span>Save your progress —</span>
         <button
           type="button"

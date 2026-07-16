@@ -7,3 +7,7 @@ export { Banner, type BannerTone } from "./banner";
 export { Skeleton, SkeletonText } from "./skeleton";
 export { EmptyState } from "./empty-state";
 export { Divider, SectionHeader } from "./divider";
+export { Menu, MenuItem } from "./menu";
+export { SectionLabel } from "./section-label";
+export { RoundAvatar } from "./round-avatar";
+export { ActivityRow } from "./activity-row";

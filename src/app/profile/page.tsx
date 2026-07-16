@@ -12,7 +12,11 @@ export default async function ProfilePage() {
 
   if (session?.user) {
     return (
-      <UserProfile displayName={session.user.name ?? "YouVersion reader"} />
+      <UserProfile
+        displayName={session.user.name ?? "YouVersion reader"}
+        language={session.user.language}
+        bibleVersionId={session.user.bibleVersionId}
+      />
     );
   }
 
