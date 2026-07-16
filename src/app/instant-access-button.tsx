@@ -23,7 +23,9 @@ export function InstantAccessButton() {
       const body = await response.json();
       if (!body.ok) throw new Error(body.error ?? "Could not start a session");
       sessionStorage.setItem(ANON_TOKEN_STORAGE_KEY, body.token);
-      router.push("/home");
+      // Path B's "brief optional prompt" (brief §2): land on onboarding,
+      // which is skippable — defaults are already in the minted session.
+      router.push("/onboarding");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Something went wrong");
       setBusy(false);

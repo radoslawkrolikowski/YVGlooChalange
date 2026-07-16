@@ -24,6 +24,12 @@ export interface AnonSession {
   bibleVersionId: number;
   /** Reading plan placeholder — real plan selection arrives in Step 11. */
   planId: null;
+  /**
+   * True once the visitor explicitly chose language/version (Step 9) —
+   * distinguishes a real choice from the minted defaults. Absent on tokens
+   * minted before any choice.
+   */
+  onboarded?: boolean;
   issuedAt: number;
 }
 
@@ -37,6 +43,11 @@ function getSecret(): string {
 
 function sign(payload: string): string {
   return createHmac("sha256", getSecret()).update(payload).digest("base64url");
+}
+
+function signSession(session: AnonSession): string {
+  const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
+  return `${payload}.${sign(payload)}`;
 }
 
 export function mintAnonSession(readerNumber: number): {
@@ -53,8 +64,27 @@ export function mintAnonSession(readerNumber: number): {
     planId: null,
     issuedAt: Date.now(),
   };
-  const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
-  return { token: `${payload}.${sign(payload)}`, session };
+  return { token: signSession(session), session };
+}
+
+/**
+ * Re-mints an existing anonymous session with new reading preferences
+ * (Step 9). The session has no database row, so "updating" it means issuing
+ * a replacement signed token; identity fields (sessionId, readerNumber,
+ * displayName, issuedAt) carry over unchanged so the visitor stays the same
+ * Reader for the whole browser session.
+ */
+export function remintAnonSession(
+  current: AnonSession,
+  preferences: { language: string; bibleVersionId: number },
+): { token: string; session: AnonSession } {
+  const session: AnonSession = {
+    ...current,
+    language: preferences.language,
+    bibleVersionId: preferences.bibleVersionId,
+    onboarded: true,
+  };
+  return { token: signSession(session), session };
 }
 
 /** Returns the session when the token is authentic, null otherwise. */

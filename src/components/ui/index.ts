@@ -11,3 +11,5 @@ export { Menu, MenuItem } from "./menu";
 export { SectionLabel } from "./section-label";
 export { RoundAvatar } from "./round-avatar";
 export { ActivityRow } from "./activity-row";
+export { ProgressSteps } from "./progress-steps";
+export { SelectionCard } from "./selection-card";

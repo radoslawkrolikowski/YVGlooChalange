@@ -1,4 +1,5 @@
 import {
+  index,
   integer,
   pgSequence,
   pgTable,
@@ -85,6 +86,34 @@ export const sessions = pgTable("sessions", {
     .references(() => users.id, { onDelete: "cascade" }),
   expires: timestamp("expires", { withTimezone: true }).notNull(),
 });
+
+// --- Bible version catalogue cache (Step 9) ------------------------------
+//
+// Per-language snapshot of the YouVersion Bible Versions API, refreshed
+// lazily when a language's rows are older than 24 hours. This cache only
+// VALIDATES and ENRICHES the curated SUPPORTED_VERSIONS config — it never
+// expands what the picker offers (Decisions: config is the source of truth;
+// unlicensed versions 403 on passage fetch).
+export const bibleVersions = pgTable(
+  "bible_versions",
+  {
+    /** Numeric YouVersion version ID. */
+    id: integer("id").primaryKey(),
+    /** App language code the catalogue was fetched for, ISO 639-1 (en/es/pt). */
+    language: text("language").notNull(),
+    abbreviation: text("abbreviation").notNull(),
+    /** Version title as returned by the live API. */
+    title: text("title").notNull(),
+    copyright: text("copyright"),
+    /** "Open in Bible App" deep link when the API provides one. */
+    deepLink: text("deep_link"),
+    /** When this language's catalogue snapshot was fetched — drives the TTL. */
+    fetchedAt: timestamp("fetched_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("bible_versions_language_idx").on(table.language)],
+);
 
 export const agentLogs = pgTable("agent_logs", {
   id: serial("id").primaryKey(),

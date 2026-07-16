@@ -1,4 +1,5 @@
 import { BookOpenText } from "lucide-react";
+import Link from "next/link";
 import { Card, Divider, SectionLabel } from "@/components/ui";
 import { findSupportedVersion } from "@/config/bible-versions";
 
@@ -9,11 +10,10 @@ const LANGUAGE_NAMES: Record<string, string> = {
 };
 
 /*
- * Reading settings card (Step 8C): language and Bible version as read-only
- * list rows — the data moved off Home. Preserves every state the old home
- * settings card rendered: real values, the anonymous "(default)" annotation,
- * and the null "Choose during onboarding" state. The "Change" affordance is
- * disabled until Step 9 builds the settings flow, which becomes the target.
+ * Reading settings card (Step 8C, wired in Step 9): language and Bible
+ * version as list rows, with "Change" linking to the reading settings
+ * screen. Anonymous defaults keep the "(default)" annotation until the
+ * visitor explicitly chooses in onboarding/settings.
  */
 export function ReadingSettingsCard({
   language,
@@ -85,20 +85,16 @@ function SettingRow({
         </p>
         <p className="text-sm font-medium text-ink">
           {value ?? (
-            <span className="font-normal text-ink-faint">
-              Choose during onboarding — coming soon
-            </span>
+            <span className="font-normal text-ink-faint">Not chosen yet</span>
           )}
         </p>
       </div>
-      {/* Disabled until Step 9's settings screen becomes the tap target. */}
-      <button
-        type="button"
-        disabled
-        className="shrink-0 cursor-not-allowed rounded-full border border-line bg-surface-soft px-3 py-1 text-sm font-medium text-ink-faint"
+      <Link
+        href="/settings/reading"
+        className="shrink-0 rounded-full border border-primary/50 px-3 py-1 text-sm font-medium text-primary transition-colors hover:bg-sage-soft"
       >
         Change
-      </button>
+      </Link>
     </div>
   );
 }

@@ -70,3 +70,31 @@ export function versionsForLanguage(language: string): SupportedVersion[] {
 export function findSupportedVersion(id: number): SupportedVersion | undefined {
   return SUPPORTED_VERSIONS.find((v) => v.id === id);
 }
+
+/** Languages the app offers in the picker — the ones with curated entries. */
+export const SUPPORTED_LANGUAGES: string[] = [
+  ...new Set(SUPPORTED_VERSIONS.map((v) => v.language)),
+];
+
+/**
+ * The version ID a passage fetch should actually use (Decisions §version
+ * catalogue): an explicitly chosen version wins while it stays licensed;
+ * otherwise the language default, unless that default is still unlicensed,
+ * in which case the licensed fallback; languages with no curated entries
+ * fall back to the English licensed fallback.
+ */
+export function effectiveVersionId(
+  language: string | null,
+  chosenId: number | null,
+): number {
+  if (chosenId !== null) {
+    const chosen = findSupportedVersion(chosenId);
+    if (chosen?.licensed) return chosenId;
+  }
+  const lang = language ?? "en";
+  const defaultId = DEFAULT_VERSION_BY_LANGUAGE[lang];
+  if (defaultId !== undefined && findSupportedVersion(defaultId)?.licensed) {
+    return defaultId;
+  }
+  return LICENSED_FALLBACK_BY_LANGUAGE[lang] ?? LICENSED_FALLBACK_BY_LANGUAGE.en;
+}
