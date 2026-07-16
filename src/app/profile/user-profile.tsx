@@ -37,7 +37,9 @@ export function UserProfile({ displayName }: { displayName: string }) {
         <div className="flex items-center gap-3">
           <Avatar name={displayName} size="lg" />
           <div>
-            <h1 className="text-xl font-bold text-ink">{displayName}</h1>
+            <h1 className="font-serif text-2xl font-semibold tracking-tight text-ink">
+              {displayName}
+            </h1>
             <Badge status="active">YouVersion account</Badge>
           </div>
         </div>

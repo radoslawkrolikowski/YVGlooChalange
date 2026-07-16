@@ -10,7 +10,7 @@ export function UpgradeBanner() {
   const { start, busy, error } = useYouVersionSignIn();
 
   return (
-    <aside className="sticky top-0 z-20 bg-primary-dark px-4 py-2.5 text-sm text-white">
+    <aside className="sticky top-0 z-20 bg-primary-dark px-4 py-2.5 text-sm text-ivory">
       <div className="mx-auto flex max-w-lg flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <span>Save your progress —</span>
         <button

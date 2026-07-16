@@ -18,7 +18,7 @@ export default function ConsentPage() {
       <Wordmark />
 
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold text-ink">
+        <h1 className="font-serif text-2xl font-semibold tracking-tight text-ink">
           Import your highlights?
         </h1>
         <p className="text-base text-ink-soft">

@@ -16,7 +16,9 @@ export function EmptyState({
           {icon}
         </div>
       )}
-      <h2 className="text-lg font-semibold text-ink">{heading}</h2>
+      <h2 className="font-serif text-xl font-semibold tracking-tight text-ink">
+        {heading}
+      </h2>
       {subtext && <p className="max-w-xs text-sm text-ink-soft">{subtext}</p>}
       {cta && <div className="mt-2">{cta}</div>}
     </div>
