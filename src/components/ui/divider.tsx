@@ -1,5 +1,5 @@
 export function Divider({ className = "" }: { className?: string }) {
-  return <hr className={`border-line ${className}`} />;
+  return <hr className={`border-gold-soft ${className}`} />;
 }
 
 export function SectionHeader({

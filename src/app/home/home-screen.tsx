@@ -33,7 +33,7 @@ export function HomeScreen({
       <div className="flex items-center gap-3">
         <Avatar name={displayName} size="lg" />
         <div>
-          <h1 className="text-xl font-bold text-ink">
+          <h1 className="font-serif text-2xl font-semibold tracking-tight text-ink">
             Welcome, {displayName}
           </h1>
           <p className="text-sm text-ink-soft">Good to have you here today.</p>

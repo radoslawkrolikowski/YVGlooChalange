@@ -25,9 +25,11 @@ export default function AgentConsolePage() {
   }));
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: "2rem 1rem" }}>
-      <h1>Agent Console</h1>
-      <p>
+    <main className="mx-auto max-w-2xl px-4 py-8">
+      <h1 className="font-serif text-2xl font-semibold tracking-tight text-ink">
+        Agent Console
+      </h1>
+      <p className="mb-6 mt-2 text-sm text-ink-soft">
         Dev-only. Triggers call each agent&apos;s <code>run()</code> through{" "}
         <code>POST /api/dev/agents/[name]</code>. Shells make a live Gloo call;
         stubs return &quot;not implemented&quot;. Every run writes an{" "}

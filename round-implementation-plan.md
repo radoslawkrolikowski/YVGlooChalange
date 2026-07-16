@@ -60,6 +60,8 @@ Non-negotiable constraints threaded through every step: all AI calls go through 
 
 **Visual identity: the landing page's warm editorial style is the canonical design language for the whole product — decided after Step 8A shipped, superseding 8A's teal palette.** The landing redesign (parchment/ivory surfaces, deep forest green as the primary brand colour, gold and sage accents, charcoal ink, Lora serif for display headings, Inter for body text, Caveat for rare handwritten accents, pill-shaped primary buttons) is the look the product leads with, and the app interior must feel like the same brand. Concretely: the design tokens in `globals.css` are re-pointed so the *brand* tokens (`--color-primary`, surfaces, etc.) resolve to the editorial palette (forest primary on parchment/ivory surfaces, gold accent) instead of teal `#1B6B6B`; the Step 8A component library keeps its component inventory and prop APIs but is re-skinned through those tokens. The teal palette is retired everywhere. Step 8B (below) performs the retrofit on all screens built before this decision; every step after 8B builds against the editorial tokens automatically because it composes from the same library. The token *names* stay stable so no downstream step's markup changes — only token values and component internals do.
 
+**Home information principle and responsive shell — decided after Step 8B (executed by Step 8C).** The home screen is organised around the user's journey, not the app's features. Every element on Home must fit one of three categories: *what should I read?* (private — today's reading), *what conversations happened?* (shared — the circle's published thread activity), or *where do I go next?* (navigation). Everything else — settings, configuration, even the circle's member roster — lives elsewhere (Profile). Two hard rules follow from the brief: the reading card is completely private (no shared "circle position", no streak language — members read at their own pace), and the circle card shows only **intentional contributions** (reflections posted, Round's digests and prompts, messages) — never member reading status, completion, or pace, which constraint #1 forbids. The circle card derives from posted thread items only, which structurally excludes Escalation-flagged reflections (they are never posted). Home assumes a **single active circle** per user; if a later step introduces multiple memberships, Home shows the most recently active circle. The layout shell becomes responsive: on desktop (≥768px) navigation moves into the top header bar (logo left; Home/My Plan/Circles/Profile links, avatar menu right) and the content column widens; on mobile the bottom tab bar remains. This supersedes 8A's fixed 512px column at all widths.
+
 **Instant Access demo circle freshness: dynamically refreshed daily.** A daily cron job re-dates the demo circle's seeded reflections to look current and regenerates the digest, lesson summary, and conversation starters via **real Gloo calls** — so the demo circle always shows today's date and doubles as a standing live integration test of the agent pipeline. Anonymous visitors' reflections are stored as rows tagged with their anonymous session ID (necessary so they appear in the thread and pass through the Escalation Agent) and are pruned by the same daily job — honouring "no data persisted between sessions" while keeping the current session fully functional.
 
 ---
@@ -271,14 +273,172 @@ Non-negotiable constraints threaded through every step: all AI calls go through 
   survive in code, and a new screen built from the component library
   comes out editorial-styled with no extra styling decisions.
 
+### Step 8C — Home and profile redesign: today-centred home, responsive shell
+
+- **What gets built:** The redesign that executes the Decisions section's
+  home-information-principle decision. No new features — the home and
+  profile screens are recomposed around the user's journey (read today →
+  see the conversation → adjust profile), and the layout shell becomes
+  responsive. All styling stays on the Step 8B editorial tokens — no new
+  colours, no new type sizes; the landing page and 8B palette are the
+  reference throughout.
+
+  Responsive layout shell (affects every app-interior screen):
+  - Mobile (<768px): unchanged — top header (wordmark left, actions
+    right), bottom tab bar, single column.
+  - Desktop (≥768px): bottom tab bar hidden; the four nav links (Home,
+    My Plan, Circles, Profile) render inline in the top header bar with
+    a clear active state; content column widens from `max-w-lg` to
+    `max-w-3xl` with the same card composition. Nothing breaks at any
+    width between.
+  - Header right side: an avatar menu (initials avatar + chevron) —
+    a new library component (menu/popover, editorial-styled) — containing
+    "Profile" and "Sign out" (Path A) or "End session" (Path B). It
+    replaces the plain sign-out text button in the home header. The
+    header reserves a slot where Step 29's notification bell will land;
+    no bell renders until Step 29.
+
+  Home screen, recomposed top-to-bottom:
+  - Greeting: time-of-day salutation ("Good morning / afternoon /
+    evening,") with the display name on its own line in the serif
+    display face — "Radoslaw" (Path A) or "Reader #4" (Path B). Replaces
+    "Welcome, {name}".
+  - **Today card (primary, the page's one hero):** elevated ivory card.
+    Label row: small icon chip + "TODAY" section label. Content: day
+    number and passage reference in the serif face at display size, a
+    short gold hairline divider, one line of helper text ("Continue
+    your reading."), and a full-width primary pill button "Start
+    reading" (book icon) — the page's single primary action. A
+    decorative watercolour landscape asset fades in behind the card's
+    right side via a CSS gradient mask (same technique as the landing
+    hero image; `aria-hidden`, never behind text at mobile widths).
+    Until Step 11 lands there is no plan, so the card ships rendering
+    its **empty state as the default**: same card frame and label, copy
+    "You're almost ready. Your first reading plan will appear here."
+    (replacing the "Plan coming soon" badge + roadmap copy), with the
+    disabled "Start reading" primary button retained so the card still
+    previews its action. The populated layout above is implemented and
+    takes over automatically when Step 11/13 wire real plan data. No
+    reading time estimate, no streaks, no circle position — the card is
+    entirely private.
+  - **Circle card (secondary):** flat ivory card. Label row: icon chip +
+    "CIRCLE" section label. Ships rendering its **empty state as the
+    default** (no circles exist until Step 16): "Your circle will gather
+    here. Reading circles arrive soon — you'll see reflections and
+    discussion prompts from your group." The populated design is
+    implemented as the spec for Steps 16–24 to fill: a short serif
+    sub-heading, 2–3 activity rows (initials avatar or the Round system
+    avatar, one-line contribution text, relative timestamp), and a
+    full-width secondary pill button "Open Circle". Activity rows show
+    **only published thread contributions** (reflections, Round's
+    prompts/digests, messages) — never member reading status or pace.
+    The "Round" system avatar (forest circle, white mark) is built as a
+    library component now; Step 20 reuses it for system messages. No
+    unread counts and no "new since your last visit" until a later step
+    defines the last-seen mechanism.
+  - Settings footer: one centred, muted line — "Reading in {language} ·
+    Bible: {version}" — linking to Profile, with the anonymous
+    "(default)" annotation carried over. Rendered when the session has
+    values; hidden when both are unset (the null "choose during
+    onboarding" state then lives on the Profile reading-settings card,
+    so the information is never lost). The old "Your settings" card
+    moves off Home — same data, now footer + Profile.
+  - Loading: skeleton greeting + two skeleton cards while the session
+    resolves. Anonymous variant keeps the persistent upgrade banner
+    above the header, unchanged.
+
+  Profile screen, recomposed in the same register:
+  - Identity header: initials avatar, name in the serif display face,
+    account badge (YouVersion account / Anonymous session) — unchanged
+    content, restyled hierarchy.
+  - New "Reading settings" card: language and Bible version as list
+    rows (the data moved from Home), preserving every state the old
+    home card rendered — real values, the anonymous "(default)"
+    annotation, and the null "Choose during onboarding — coming soon"
+    state. Read-only rows with a disabled "Change" affordance until
+    Step 9 builds the settings flow; Step 9's settings screen becomes
+    the tap target.
+  - Existing cards restyled, not restructured: imported highlights
+    (count, revoke-with-confirmation, Step 7 wiring later) and
+    account/session (sign out / end session) keep their content and
+    behaviour, gaining the icon-chip section label treatment and serif
+    card headings for visual parity with Home.
+  - Both variants (signed-in and anonymous) updated; anonymous keeps
+    the upgrade banner.
+
+  **Element inventory — nothing implemented is removed.** Every element
+  currently in code survives this step, redesigned or relocated, never
+  deleted:
+  - Home: avatar (moves from the greeting row into the header avatar
+    menu), welcome heading (becomes the time-of-day greeting), Today's
+    reading card incl. its disabled "Start reading" button (restyled
+    hero card + empty state), language/version display incl.
+    "(default)" and null states (becomes footer line + Profile card),
+    sign-out action (moves into the avatar menu), anonymous upgrade
+    banner (unchanged), loading skeletons (restyled to the new layout).
+  - Profile: identity header with avatar/name/badge, imported-highlights
+    card with count, explanation, revoke flow (warning banner +
+    confirm/cancel pair), account/session card with sign-out /
+    end-session — all kept with identical behaviour, restyled only.
+
+  Explicitly out of scope (shown in the reference mock but not planned
+  or not yet implemented): reading-time estimate (~9 min), unread
+  counts, "new since your last visit" / last-seen tracking, notification
+  bell and badge (Step 29), photo avatars (initials only — no avatar
+  images exist in the data model), member reading status of any kind.
+
+  **Scope boundary:** the redesign applies to the home and profile
+  screens only. The landing page is not touched in any way — it remains
+  the visual reference (as in 8B). The `/plan`, `/circles`, and consent
+  screens are not redesigned; the first two inherit the responsive
+  shell automatically (they render inside it) and are verified in both
+  nav modes, nothing more.
+
+- **Why this step comes here:** The 8A home was organised around
+  features (reading card + settings card) and reads like a settings
+  dashboard; the product thesis is social. Recomposing Home before
+  Phase 3 means Steps 9–36 land their pieces (onboarding values, plan
+  day, circle activity, bell) into slots this layout already defines,
+  and the responsive shell fixes the desktop single-narrow-column
+  problem for every screen at once — later steps inherit both for free.
+
+- **Touches:** Layout shell (`app-shell.tsx` — responsive nav, avatar
+  menu, bell slot), new library components (menu/popover, icon-chip
+  section label, activity row, Round system avatar), home screen (both
+  variants), profile screen (both variants), watercolour card asset,
+  no token changes.
+
+- **How to test it:** At 390px: Home shows greeting, Today card (empty
+  state), Circle card (empty state), no settings card, bottom nav
+  intact; profile shows the reading-settings rows. At desktop width:
+  bottom nav disappears, Home/My Plan/Circles/Profile render in the
+  header with the active link marked, content column widens, nothing
+  overlaps at any width between. Avatar menu opens with Profile +
+  Sign out (signed in) / End session (anonymous); both actions work.
+  Anonymous path still shows "Reader #n" in the greeting and the
+  upgrade banner. Grep confirms no new colour or type values outside
+  the token file; every visible element traces to one of the three
+  home categories (read / conversation / navigation).
+
+- **Definition of done:** Home is organised as greeting → Today card →
+  Circle card → settings footer with exactly one primary action, both
+  cards ship with designed empty states as their defaults, Profile owns
+  the reading settings, the shell is responsive with desktop top-nav,
+  and both session paths render correctly in the editorial style with
+  zero member-progress information anywhere. Every element in the
+  element inventory above is still present and functional — redesigned,
+  never removed.
+
 ### UI standard for all steps after 8B
 
 Step 8A delivered the component library and layout shell; Step 8B re-pointed its design tokens to the landing page's **editorial style** (parchment/ivory surfaces, forest-green primary, gold/sage accents, Lora serif display headings, pill primary buttons), which is the product's canonical design language per the Decisions section. Every subsequent step that adds or changes a screen ships that screen at **production visual quality in the same step** — there is no later "polish pass." Concretely, for every step below:
 
 - All UI is composed from the component library and the editorial design tokens; no step introduces its own colours, type sizes, or spacing values, and **no step reintroduces the retired teal palette**. New reusable patterns (e.g. bottom sheet, toast) are added *to the library* in the editorial style, then used.
+- Every app-interior screen renders inside the Step 8C responsive shell and follows its screen register: icon-chip section labels, serif card headings, one clear primary action per screen, elevated hero card for the screen's main object with flat cards for secondary content. The home and profile screens are the visual reference for every interior screen — a `/plan` or `/circles` screen must look like a sibling of Home, not a different app.
 - Screen titles and display headings use the serif display face; body and UI text stay on the sans face — matching the landing page's typographic register.
 - Every screen ships with its non-happy-path states designed: loading (skeletons), empty (empty-state component), and error (banner) — never unstyled placeholders or raw JSON.
-- Everything is verified mobile-first (390px) and must not break at desktop widths.
+- Everything is verified mobile-first (390px) and must not break at desktop widths. Step 8C makes the shell responsive (desktop top-nav, wider column) — screens compose identically for both; new screens must be checked in both nav modes.
+- Steps that add home-screen elements (Step 11/13 plan data, Steps 16–24 circle activity, Step 29 bell) fill the slots Step 8C defines — they do not restructure Home, and everything added to Home must fit one of its three information categories (private reading / shared conversation / navigation) per the Decisions section.
 - Each step's **UI** bullet below is part of its definition of done: the step is not complete until its screens look like part of the same product as the landing page and the Step 8B screens. Where a step's UI bullet below says "8A", read it as the 8B-retrofitted library — same components, editorial skin.
 
 ## Phase 3 — Onboarding and Reading Plans
@@ -301,7 +461,7 @@ Step 8A delivered the component library and layout shell; Step 8B re-pointed its
 
 ### Step 11 — Pre-defined reading plans, selection, and plan view
 - **What gets built:** The reading plan schema: a plan is a structured list of day-by-day passage references (no Bible text ever stored — references only). A seed migration inserts the starter library (Psalms in 30 days, Gospel of Mark, Ruth). Onboarding's plan step lets the user browse and select a plan; a plan view shows the day list with the user's current day and per-day references. User plan progress (current day, days completed) is stored privately — never exposed to other members, per the no-comparison constraint.
-- **UI:** Plan library renders as elevated cards (plan name, length, one-line description) with a clear selected state. The plan view is a scrollable day list with the current day visually highlighted, completed days check-marked, and per-day references as chips — built from library badges, cards, and dividers, with skeleton loading and an empty state. This day-list component is reused by Steps 12 and 14.
+- **UI:** Plan library renders as elevated cards (plan name, length, one-line description) with a clear selected state. The plan view is a scrollable day list with the current day visually highlighted, completed days check-marked, and per-day references as chips — built from library badges, cards, and dividers, with skeleton loading and an empty state. This day-list component is reused by Steps 12 and 14. The `/plan` tab screen is composed in the Step 8C register — same responsive shell as Home, icon-chip "MY PLAN" section label, serif headings, the current day as the screen's hero card with "Continue reading" as the single primary action — so it reads as a sibling of the home screen, replacing the 8A placeholder empty state.
 - **Why this step comes here:** The plan is the spine of the daily loop — passage view, prompts, digests, and reminders all key off "today's reference." Pre-defined plans are pure data, so they land before AI generation. Depends on Steps 2, 9–10.
 - **Touches:** Database (`plans`, `plan_days`, `user_plan_progress`), seed migration, onboarding UI, plan view UI.
 - **How to test it:** In onboarding, pick "Psalms in 30 days"; the plan view shows 30 days with correct Psalm references and Day 1 marked current. Verify by database inspection that only references are stored, never passage text. Anonymous user selects a plan and sees the same view.
@@ -309,7 +469,7 @@ Step 8A delivered the component library and layout shell; Step 8B re-pointed its
 
 ### Step 12 — PlanBuilder Agent: AI-generated plans with YouVersion validation
 - **What gets built:** The "create my own plan" onboarding path. PlanBuilder sends onboarding goals, time per day, and topics to Gloo and receives a structured day-by-day plan. **Every reference is validated by a live YouVersion Passages fetch before saving.** Failed references trigger up to 2 single-day regenerations (with the failure fed back to Gloo), then substitution from a curated topic-tagged fallback pool with the day marked "adjusted" in the preview. Generated plans are saved in the identical structure as seeded plans. Total generation failure offers the pre-defined library instead.
-- **UI:** Goal input as a friendly library form; generation shows a warm, branded waiting state ("Building your plan…" with skeleton day rows), never a spinner on a blank page. The preview reuses Step 11's day-list component with "adjusted" days marked by a badge and a one-line explanation. Wholesale failure renders the empty-state component with a clear CTA into the pre-defined library.
+- **UI:** Goal input as a friendly library form; generation shows a warm, branded waiting state ("Building your plan…" with skeleton day rows), never a spinner on a blank page. The preview reuses Step 11's day-list component with "adjusted" days marked by a badge and a one-line explanation. Wholesale failure renders the empty-state component with a clear CTA into the pre-defined library. All screens in the Step 8C register (responsive shell, serif headings, one primary action), matching the Step 11 plan screens exactly.
 - **Why this step comes here:** Requires the plan schema (Step 11), Gloo client (Step 4), and YouVersion client (Step 3). Landing it now means everything downstream works identically for both plan origins.
 - **Touches:** PlanBuilder agent, Gloo Completions V2, YouVersion Passages API (validation), database (same plan tables), onboarding UI.
 - **How to test it:** Choose "create my own plan" with goals like "learn about forgiveness, 10 minutes a day, 2 weeks"; receive a 14-day plan preview; spot-check three generated references by opening them in the passage view (Step 13, or via the Step 3 dev route) — all resolve. Check `agent_logs` for the PlanBuilder run. Force a validation failure (temporarily inject a bogus reference in dev) and observe the retry-then-fallback path produce a valid plan.
@@ -345,7 +505,7 @@ Step 8A delivered the component library and layout shell; Step 8B re-pointed its
 
 ### Step 16 — Circle creation, browsing, and joining
 - **What gets built:** Circle entity with states (forming → active → stalled → archived), size limits (min 3, max 5), and an attached reading plan. Users can create a circle (choosing a plan), browse open circles (name, plan, member count — never member progress), and join one. A circle becomes `active` at 3 members; joining is blocked at 5. Members list shows display names only.
-- **UI:** Circle browse as a card list: circle name, plan badge, member count shown as stacked avatar chips, and the forming/active state badge. Create-circle is a short library form; joining confirms with clear feedback; a full circle communicates refusal with a friendly banner, not an error. Empty state ("No open circles yet — start one") with a create CTA. Circles tab in the bottom nav goes live here.
+- **UI:** Circle browse as a card list: circle name, plan badge, member count shown as stacked avatar chips, and the forming/active state badge. Create-circle is a short library form; joining confirms with clear feedback; a full circle communicates refusal with a friendly banner, not an error. Empty state ("No open circles yet — start one") with a create CTA. The Circles tab goes live here (bottom nav on mobile, header nav on desktop), replacing the 8A placeholder. The `/circles` screen is composed in the Step 8C register — same responsive shell as Home, icon-chip "CIRCLES" section label, serif headings, the user's own circle as the hero card (once joined) with browse results as flat cards beneath — a sibling of the home screen. Joining a circle also lights up Home's circle card (the Step 8C slot) with the circle name and "Open Circle" action.
 - **Why this step comes here:** The social container for everything in Phases 5–6. Depends on plans (Step 11) and sessions (Steps 6/8).
 - **Touches:** Database (`circles`, `circle_members`), circle browse/create/join UI.
 - **How to test it:** With three test accounts: account A creates a circle on the Mark plan (state `forming`); accounts B and C browse, find it, join; on C's join the state flips to `active`. Add two more members, then a sixth attempt is refused with a clear message. Confirm the browse view exposes no per-member progress anywhere.
@@ -353,7 +513,7 @@ Step 8A delivered the component library and layout shell; Step 8B re-pointed its
 
 ### Step 17 — Circle thread with polling
 - **What gets built:** The circle thread: members post text messages, rendered chronologically with author display names and timestamps. The thread refetches every 10 seconds while visible, pauses when the tab is hidden, and refetches immediately after posting. Message schema is designed for what's coming: an immutable original body + source-language field, with a separate additive `message_translations` table (empty for now) — originals are never modified, per the brief.
-- **UI:** The thread is styled as a modern messaging surface within the design system: message rows with avatar chips, author name and relative timestamp, own-vs-others visual distinction, date separators, and a composer pinned above the bottom nav (library textarea + send button, disabled-while-sending state). Auto-scroll on new messages, skeleton rows on first load, and an empty state before the first message. This thread rendering is the base every later thread feature (Steps 19–28) extends.
+- **UI:** The thread is styled as a modern messaging surface within the design system: message rows with avatar chips, author name and relative timestamp, own-vs-others visual distinction, date separators, and a composer pinned above the bottom nav on mobile and at the content column's bottom on desktop (library textarea + send button, disabled-while-sending state). Auto-scroll on new messages, skeleton rows on first load, and an empty state before the first message. Renders inside the Step 8C responsive shell with the editorial register (serif circle-name header, ivory message surfaces on parchment); Round's system messages will use the Step 8C Round system avatar. This thread rendering is the base every later thread feature (Steps 19–28) extends.
 - **Why this step comes here:** The thread is the surface for reflections, starters, digests, and translations. The polling mechanism built here also delivers async translation swaps later. Depends on Step 16.
 - **Touches:** Database (`messages`, `message_translations` shell), thread UI, polling logic.
 - **How to test it:** Open the same circle in two browsers as two members. Post from one; within 10 seconds it appears in the other without a manual refresh. Background the second tab and verify (network inspector) polling stops; foreground it and polling resumes.

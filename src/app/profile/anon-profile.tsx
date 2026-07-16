@@ -46,7 +46,9 @@ export function AnonProfile() {
         <div className="flex items-center gap-3">
           <Avatar name={session.displayName} size="lg" />
           <div>
-            <h1 className="text-xl font-bold text-ink">{session.displayName}</h1>
+            <h1 className="font-serif text-2xl font-semibold tracking-tight text-ink">
+              {session.displayName}
+            </h1>
             <Badge status="neutral">Anonymous session</Badge>
           </div>
         </div>

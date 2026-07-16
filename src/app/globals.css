@@ -1,27 +1,32 @@
 @import "tailwindcss";
 
 /*
- * Round design tokens (Step 8A). All colour, type, radius, and shadow
- * decisions live here — screens and components consume these tokens via
- * Tailwind utilities and never hardcode values.
+ * Round design tokens (Step 8A, re-pointed in Step 8B). All colour, type,
+ * radius, and shadow decisions live here — screens and components consume
+ * these tokens via Tailwind utilities and never hardcode values.
+ *
+ * Step 8B: the landing page's warm editorial style is the canonical design
+ * language (see the visual-identity decision). The brand tokens below
+ * resolve to the editorial palette — forest primary on parchment/ivory
+ * surfaces, gold and sage accents, warm charcoal ink. The original 8A
+ * palette is retired. Token names are stable so no downstream markup changes.
  */
 @theme {
-  /* Brand */
-  --color-primary: #1b6b6b;
-  --color-primary-light: #e8f5f5;
-  --color-primary-dark: #134f4f;
+  /* Brand — deep forest green, with a parchment-tinted light variant */
+  --color-primary: #16302a;
+  --color-primary-light: #e4e9dd;
+  --color-primary-dark: #0f221e;
 
-  /* Neutrals */
-  --color-ink: #1f2933;
-  --color-ink-soft: #52606d;
-  --color-ink-faint: #7b8794;
-  --color-line: #e4e7eb;
-  --color-surface: #ffffff;
-  --color-surface-soft: #f5f7fa;
-  --color-disabled: #cbd2d9;
+  /* Ink — warm charcoal scale on warm surfaces */
+  --color-ink: #2d2a25;
+  --color-ink-soft: #57514a;
+  --color-ink-faint: #6f6a5e;
+  --color-line: #e6dfd0;
+  --color-surface: #fdfbf5;
+  --color-surface-soft: #f6f1e7;
+  --color-disabled: #d9d2c2;
 
-  /* Landing palette — warm editorial neutrals (Step 8A landing redesign).
-     App-interior screens keep the teal brand tokens above. */
+  /* Editorial palette — shared by the landing page and the app interior */
   --color-parchment: #f6f1e7;
   --color-ivory: #fdfbf5;
   --color-sage: #9aa88f;
@@ -33,17 +38,18 @@
   --color-gold-soft: #ecdfc8;
 
   /* Semantic */
-  --color-success: #1a7f4f;
+  --color-success: #16744a;
   --color-success-soft: #e6f4ec;
   --color-warning: #a05e03;
   --color-warning-soft: #fdf3e1;
   --color-danger: #b3261e;
   --color-danger-dark: #8f1e18;
   --color-danger-soft: #fbeae9;
-  --color-info: #1b6b6b;
-  --color-info-soft: #e8f5f5;
+  --color-info: #16302a;
+  --color-info-soft: #e7ebe2;
 
-  /* Typography */
+  /* Typography — Lora (serif) for display headings, Inter for body/UI,
+     Caveat reserved for rare devotional accents */
   --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI",
     Roboto, sans-serif;
   --font-serif: var(--font-lora), Georgia, "Times New Roman", serif;
@@ -61,15 +67,15 @@
   --text-2xl: 1.5rem;
   --text-2xl--line-height: 2rem;
 
-  /* Radius */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.625rem;
-  --radius-lg: 1rem;
+  /* Radius — warmed to the landing's softer values */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1.25rem;
   --radius-full: 9999px;
 
-  /* Shadows */
-  --shadow-card: 0 1px 2px rgb(31 41 51 / 0.06), 0 4px 12px rgb(31 41 51 / 0.08);
-  --shadow-raised: 0 2px 4px rgb(31 41 51 / 0.08), 0 8px 24px rgb(31 41 51 / 0.12);
+  /* Shadows — warm charcoal, softer spread */
+  --shadow-card: 0 1px 2px rgb(45 42 37 / 0.05), 0 4px 14px rgb(45 42 37 / 0.08);
+  --shadow-raised: 0 2px 4px rgb(45 42 37 / 0.07), 0 8px 26px rgb(45 42 37 / 0.12);
 }
 
 html,
