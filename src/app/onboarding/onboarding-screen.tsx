@@ -10,8 +10,8 @@ import { UpgradeBanner } from "../home/upgrade-banner";
 
 /*
  * Onboarding step 1 of 3 (Step 9): language and Bible version. The stepped
- * progress indicator is shared with Steps 10–12; until Step 10 builds the
- * next screen, Continue lands on Home. Path B (anonymous) sees a clearly
+ * progress indicator is shared with Steps 10–12; Continue moves on to the
+ * "About you" questions (Step 10). Path B (anonymous) sees a clearly
  * visible skip that keeps the minted defaults, per the brief's "optional
  * prompt" — Path A is expected to choose.
  */
@@ -59,13 +59,13 @@ export function OnboardingScreen({
             initialLanguage={initialLanguage}
             initialVersionId={initialVersionId}
             submitLabel="Continue"
-            onSaved={() => router.push("/home")}
+            onSaved={() => router.push("/onboarding/about")}
           />
         </Card>
 
         {isAnonymous && (
           <Button variant="ghost" full onClick={() => router.push("/home")}>
-            Skip for now — keep the English defaults
+            Skip for now — keep the defaults
           </Button>
         )}
       </div>

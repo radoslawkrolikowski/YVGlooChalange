@@ -9,6 +9,7 @@
 
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { DEFAULT_VERSION_BY_LANGUAGE } from "@/config/bible-versions";
+import type { ProfileAnswers } from "@/config/profile";
 
 export interface AnonSession {
   kind: "anonymous";
@@ -30,6 +31,12 @@ export interface AnonSession {
    * minted before any choice.
    */
   onboarded?: boolean;
+  /**
+   * Onboarding profile answers (Step 10). Absent until the visitor answers —
+   * readers fall back to PROFILE_DEFAULTS. Held in the token because Path B
+   * has no database row.
+   */
+  profile?: ProfileAnswers;
   issuedAt: number;
 }
 
@@ -84,6 +91,19 @@ export function remintAnonSession(
     bibleVersionId: preferences.bibleVersionId,
     onboarded: true,
   };
+  return { token: signSession(session), session };
+}
+
+/**
+ * Re-mints an existing anonymous session with onboarding profile answers
+ * (Step 10) — same replacement-token mechanism as remintAnonSession, same
+ * carried-over identity.
+ */
+export function remintAnonProfile(
+  current: AnonSession,
+  profile: ProfileAnswers,
+): { token: string; session: AnonSession } {
+  const session: AnonSession = { ...current, profile };
   return { token: signSession(session), session };
 }
 
