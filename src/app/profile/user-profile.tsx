@@ -14,6 +14,8 @@ import {
   Divider,
   SectionLabel,
 } from "@/components/ui";
+import type { ProfileAnswers } from "@/config/profile";
+import { AboutYouCard } from "./about-you-card";
 import { ReadingSettingsCard } from "./reading-settings-card";
 
 /*
@@ -27,10 +29,12 @@ export function UserProfile({
   displayName,
   language,
   bibleVersionId,
+  profileAnswers,
 }: {
   displayName: string;
   language: string | null;
   bibleVersionId: number | null;
+  profileAnswers: ProfileAnswers;
 }) {
   const [confirmingRevoke, setConfirmingRevoke] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -64,6 +68,8 @@ export function UserProfile({
           bibleVersionId={bibleVersionId}
           isAnonymous={false}
         />
+
+        <AboutYouCard answers={profileAnswers} isDefaults={false} />
 
         <Card className="flex flex-col gap-3">
           <SectionLabel icon={<Highlighter size={14} aria-hidden />}>

@@ -52,6 +52,25 @@ export const users = pgTable("users", {
   language: text("language"),
   /** Preferred YouVersion Bible version ID, e.g. NVI's numeric ID. */
   bibleVersionId: integer("bible_version_id"),
+  // Onboarding profile answers (Step 10) — all nullable/defaulted until the
+  // user answers; chip values come from src/config/profile.ts (the controlled
+  // vocabulary shared with circle matching and the PlanBuilder fallback pool).
+  /** Free text: what the user wants to learn — PlanBuilder's `goals` input. */
+  goals: text("goals"),
+  /** Why they want to read the Bible — MOTIVATION_OPTIONS value. */
+  motivation: text("motivation"),
+  /** FAMILIARITY_OPTIONS value: brand_new / read_some / read_regularly. */
+  bibleFamiliarity: text("bible_familiarity"),
+  /** LIFE_SEASON_OPTIONS value. */
+  lifeSeason: text("life_season"),
+  /** Reading time per day in minutes: 5 / 10 / 15 / 30. */
+  timePerDayMinutes: integer("time_per_day_minutes"),
+  /** TOPIC_OPTIONS values. */
+  topics: text("topics").array(),
+  /** Free-text "other" topic. */
+  topicsOther: text("topics_other"),
+  /** CIRCLE_HOPE_OPTIONS values — circle matching only, never PlanBuilder. */
+  circleHopes: text("circle_hopes").array(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

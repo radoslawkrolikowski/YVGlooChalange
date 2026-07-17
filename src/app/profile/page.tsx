@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { loadUserProfileAnswers } from "@/lib/profile";
 import { AnonProfile } from "./anon-profile";
 import { UserProfile } from "./user-profile";
 
@@ -16,6 +17,7 @@ export default async function ProfilePage() {
         displayName={session.user.name ?? "YouVersion reader"}
         language={session.user.language}
         bibleVersionId={session.user.bibleVersionId}
+        profileAnswers={await loadUserProfileAnswers(session.user.id)}
       />
     );
   }

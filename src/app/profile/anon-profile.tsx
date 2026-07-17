@@ -14,9 +14,11 @@ import {
   Divider,
   SectionLabel,
 } from "@/components/ui";
+import { PROFILE_DEFAULTS } from "@/config/profile";
 import { clearAnonSession, useAnonSession } from "@/lib/use-anon-session";
 import { HomeSkeleton } from "../home/home-skeleton";
 import { UpgradeBanner } from "../home/upgrade-banner";
+import { AboutYouCard } from "./about-you-card";
 import { ReadingSettingsCard } from "./reading-settings-card";
 
 /*
@@ -66,6 +68,11 @@ export function AnonProfile() {
           language={session.language}
           bibleVersionId={session.bibleVersionId}
           isAnonymous={!session.onboarded}
+        />
+
+        <AboutYouCard
+          answers={session.profile ?? PROFILE_DEFAULTS}
+          isDefaults={!session.profile}
         />
 
         <Card className="flex flex-col gap-3">
