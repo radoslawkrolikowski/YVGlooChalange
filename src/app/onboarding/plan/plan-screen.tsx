@@ -1,28 +1,27 @@
 "use client";
 
-import { BookOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { HeaderMenu } from "@/components/layout/header-menu";
-import { PlanPicker } from "@/components/plan/plan-picker";
-import { Button, Card, ProgressSteps, SectionLabel } from "@/components/ui";
+import { Button, ProgressSteps } from "@/components/ui";
+import type { ProfileAnswers } from "@/config/profile";
 import { UpgradeBanner } from "../../home/upgrade-banner";
 import { ONBOARDING_STEPS } from "../onboarding-screen";
+import { BuildPlan } from "./build-plan";
 
 /*
- * Onboarding step 3 of 3 (Step 11): pick a pre-defined reading plan.
- * Finishing lands on Home with the Today card populated. Path B sees the
- * usual clearly visible skip. Once Step 12 lands, "create my own plan"
- * becomes the recommended default here and this library becomes the
- * secondary path.
+ * Onboarding step 3 of 3 (Step 12): "create my own plan" is the recommended
+ * default — a builder form pre-filled from the Step 10 answers with "Build
+ * my plan" as the single primary action; the Step 11 pre-defined library is
+ * the quiet secondary path at /onboarding/plan/library.
  */
 export function PlanOnboardingScreen({
   displayName,
-  initialPlanId,
+  initialAnswers,
   isAnonymous,
 }: {
   displayName: string;
-  initialPlanId: string | null;
+  initialAnswers: ProfileAnswers;
   isAnonymous: boolean;
 }) {
   const router = useRouter();
@@ -39,24 +38,15 @@ export function PlanOnboardingScreen({
 
         <div className="flex flex-col gap-2">
           <h1 className="font-serif text-2xl font-semibold tracking-tight text-ink">
-            Choose your first plan
+            Let&apos;s build your plan
           </h1>
           <p className="text-sm text-ink-soft">
-            A reading plan gives every day its passage. Your circle reads the
-            same plan together — you can change it any time.
+            Round designs a day-by-day reading plan around your goals, your
+            time, and your topics — every passage checked against YouVersion.
           </p>
         </div>
 
-        <Card variant="elevated" className="flex flex-col gap-4">
-          <SectionLabel icon={<BookOpen size={14} aria-hidden />}>
-            Plan library
-          </SectionLabel>
-          <PlanPicker
-            initialPlanId={initialPlanId}
-            submitLabel="Start this plan"
-            onSaved={() => router.push("/home")}
-          />
-        </Card>
+        <BuildPlan initialAnswers={initialAnswers} />
 
         {isAnonymous && (
           <Button variant="ghost" full onClick={() => router.push("/home")}>

@@ -1,20 +1,21 @@
 import { auth } from "@/lib/auth";
-import { loadUserPlanState } from "@/lib/plans";
+import { loadUserProfileAnswers } from "@/lib/profile";
 import { AnonPlan } from "./anon-plan";
 import { PlanOnboardingScreen } from "./plan-screen";
 
 export const dynamic = "force-dynamic";
 
-// Onboarding step 3 entry (Step 11), mirroring /onboarding's session split.
+// Onboarding step 3 entry (Step 12): the plan builder, pre-filled from the
+// Step 10 profile answers, mirroring /onboarding's session split.
 export default async function PlanOnboardingPage() {
   const session = await auth();
 
   if (session?.user) {
-    const state = await loadUserPlanState(session.user.id);
+    const answers = await loadUserProfileAnswers(session.user.id);
     return (
       <PlanOnboardingScreen
         displayName={session.user.name ?? "YouVersion reader"}
-        initialPlanId={state?.plan.id ?? null}
+        initialAnswers={answers}
         isAnonymous={false}
       />
     );

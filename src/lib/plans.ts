@@ -36,7 +36,11 @@ export interface PlanState {
   today: PlanDay;
 }
 
-/** The plan library, longest plan first (seed rows share a created_at). */
+/**
+ * The plan library, longest plan first (seed rows share a created_at).
+ * Pre-defined plans only — AI-generated plans (Step 12) live in the same
+ * tables but are personal, never offered in the shared library.
+ */
 export async function listPlans(): Promise<PlanSummary[]> {
   return db
     .select({
@@ -46,6 +50,7 @@ export async function listPlans(): Promise<PlanSummary[]> {
       lengthDays: plans.lengthDays,
     })
     .from(plans)
+    .where(eq(plans.source, "predefined"))
     .orderBy(desc(plans.lengthDays), asc(plans.id));
 }
 

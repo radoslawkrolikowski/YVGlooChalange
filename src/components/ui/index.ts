@@ -14,3 +14,4 @@ export { ActivityRow } from "./activity-row";
 export { ProgressSteps } from "./progress-steps";
 export { SelectionCard } from "./selection-card";
 export { ChoiceChips, MultiChoiceChips } from "./choice-chips";
+export { AgentThinking } from "./agent-thinking";

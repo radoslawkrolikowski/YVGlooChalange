@@ -53,11 +53,12 @@ export interface Agent<Input, Output> {
   description: string;
   tier: 1 | 2 | 3;
   /**
+   * "real": the agent's plan step has landed and run() does its real job.
    * "shell": run() performs a real Gloo call with a placeholder prompt;
    * later steps replace prompt and output shape, not the structure.
    * "stub": run() is a logged no-op returning "not_implemented".
    */
-  implementation: "shell" | "stub";
+  implementation: "real" | "shell" | "stub";
   systemPrompt: string;
   /** Example input rendered in the dev Agent Console trigger form. */
   sampleInput: Input;

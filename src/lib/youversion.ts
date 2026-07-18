@@ -200,6 +200,39 @@ export async function fetchPassage(
   };
 }
 
+/**
+ * Live-validate that a USFM reference resolves to real text in a version —
+ * PlanBuilder's per-reference gate (Step 12). Cheaper than fetchPassage: it
+ * skips the version-metadata fetch, because validation only needs to know
+ * the passage exists and has content. Returns the failure message on an
+ * unresolvable reference (fed back into Gloo's regeneration prompt) or null
+ * when the reference is valid; non-404 errors (auth, network, 5xx) are
+ * thrown, since they say nothing about the reference itself.
+ */
+export async function validatePassageReference(
+  reference: string,
+  versionId: number,
+): Promise<string | null> {
+  const endpoint = `validate ${reference} in version ${versionId}`;
+  try {
+    const passage = await callSdk(endpoint, () =>
+      bibleClient().getPassage(versionId, reference, "text"),
+    );
+    if (!passage.content || passage.content.trim().length === 0) {
+      return `Reference "${reference}" returned no text in version ${versionId}`;
+    }
+    return null;
+  } catch (error) {
+    if (
+      error instanceof YouVersionApiError &&
+      (error.status === 404 || error.status === 400)
+    ) {
+      return `Reference "${reference}" could not be found (HTTP ${error.status})`;
+    }
+    throw error;
+  }
+}
+
 /** Fetch a single Bible version record by its numeric ID. */
 export async function fetchVersion(versionId: number): Promise<BibleVersion> {
   const endpoint = `version ${versionId}`;
