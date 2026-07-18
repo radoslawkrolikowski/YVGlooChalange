@@ -46,9 +46,12 @@ export interface HighlightSummary {
   sample: {
     id: number;
     label: string;
-    versionId: number;
+    /** Version the snippet TEXT came from (may be the licensed fallback,
+     * not the version the highlight was made in) — attribution and grouping
+     * key off this, because attribution must match the displayed text. */
+    snippetVersionId: number | null;
     versionAbbreviation: string | null;
-    /** Copyright attribution of the version the highlight was made in —
+    /** Copyright attribution of the version the snippet text came from —
      * displayed with the snippet per the global attribution constraint. */
     attribution: string | null;
     snippet: string | null;
@@ -130,15 +133,13 @@ function isAuthFailure(error: unknown): boolean {
 async function resolveSnippet(
   reference: string,
   versionId: number,
-): Promise<{ label: string | null; snippet: string | null }> {
-  const fallbackId = (() => {
-    const language = findSupportedVersion(versionId)?.language ?? "en";
-    return (
-      LICENSED_FALLBACK_BY_LANGUAGE[language] ?? LICENSED_FALLBACK_BY_LANGUAGE.en
-    );
-  })();
-
-  for (const id of [versionId, fallbackId]) {
+): Promise<{
+  label: string | null;
+  snippet: string | null;
+  /** Version the snippet text was actually fetched from. */
+  snippetVersionId: number | null;
+}> {
+  for (const id of [versionId, snippetFallbackVersionId(versionId)]) {
     try {
       const passage = await fetchPassageSnippet(reference, id);
       return {
@@ -147,12 +148,32 @@ async function resolveSnippet(
           passage.text.length > MAX_SNIPPET_LENGTH
             ? `${passage.text.slice(0, MAX_SNIPPET_LENGTH).trimEnd()}…`
             : passage.text,
+        snippetVersionId: id,
       };
     } catch {
       // Try the fallback version, then give up on the snippet only.
     }
   }
-  return { label: null, snippet: null };
+  return { label: null, snippet: null, snippetVersionId: null };
+}
+
+/** The licensed same-language version a snippet fetch falls back to. */
+function snippetFallbackVersionId(versionId: number): number {
+  const language = findSupportedVersion(versionId)?.language ?? "en";
+  return (
+    LICENSED_FALLBACK_BY_LANGUAGE[language] ?? LICENSED_FALLBACK_BY_LANGUAGE.en
+  );
+}
+
+/**
+ * Best guess at a pre-7A row's snippet source: resolveSnippet tries the
+ * highlight's own version first, which succeeds only when licensed;
+ * otherwise the snippet came from the licensed fallback.
+ */
+function likelySnippetVersionId(versionId: number): number {
+  return findSupportedVersion(versionId)?.licensed
+    ? versionId
+    : snippetFallbackVersionId(versionId);
 }
 
 /** Stores fetched highlights (snippets resolved), skipping duplicates. */
@@ -187,7 +208,7 @@ async function storeHighlights(
     toImport,
     SCAN_CONCURRENCY,
     async (highlight) => {
-      const { label, snippet } = await resolveSnippet(
+      const { label, snippet, snippetVersionId } = await resolveSnippet(
         highlight.reference,
         highlight.versionId,
       );
@@ -198,6 +219,7 @@ async function storeHighlights(
         versionId: highlight.versionId,
         versionAbbreviation: abbreviations.get(highlight.versionId) ?? null,
         snippet,
+        snippetVersionId,
         color: highlight.color,
       };
     },
@@ -315,15 +337,26 @@ export async function loadHighlightSummary(
       versionId: highlights.versionId,
       versionAbbreviation: highlights.versionAbbreviation,
       snippet: highlights.snippet,
+      snippetVersionId: highlights.snippetVersionId,
       importedAt: highlights.importedAt,
     })
     .from(highlights)
     .where(eq(highlights.userId, userId))
     .orderBy(desc(highlights.importedAt), desc(highlights.id));
 
-  const sampleRows = rows.slice(0, sampleSize);
+  // Attribution follows the snippet's actual source version; pre-7A rows
+  // without one stored get the deterministic best guess.
+  const sampleRows = rows.slice(0, sampleSize).map((row) => ({
+    ...row,
+    snippetVersionId:
+      row.snippet === null
+        ? null
+        : (row.snippetVersionId ?? likelySnippetVersionId(row.versionId)),
+  }));
   const attributions = await resolveVersionAttributions(
-    sampleRows.map((row) => row.versionId),
+    sampleRows
+      .map((row) => row.snippetVersionId)
+      .filter((id): id is number => id !== null),
   );
 
   return {
@@ -331,9 +364,12 @@ export async function loadHighlightSummary(
     sample: sampleRows.map((row) => ({
       id: row.id,
       label: row.label ?? row.reference,
-      versionId: row.versionId,
+      snippetVersionId: row.snippetVersionId,
       versionAbbreviation: row.versionAbbreviation,
-      attribution: attributions.get(row.versionId) ?? null,
+      attribution:
+        row.snippetVersionId !== null
+          ? (attributions.get(row.snippetVersionId) ?? null)
+          : null,
       snippet: row.snippet,
       importedAt: row.importedAt.toISOString(),
     })),

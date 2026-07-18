@@ -104,7 +104,8 @@ export function HighlightsCard({
                 </p>
               )}
               {entry.attribution &&
-                summary.sample[index + 1]?.versionId !== entry.versionId && (
+                summary.sample[index + 1]?.snippetVersionId !==
+                  entry.snippetVersionId && (
                   <VersionAttribution text={entry.attribution} />
                 )}
             </li>

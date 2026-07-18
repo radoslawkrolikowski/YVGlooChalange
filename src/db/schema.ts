@@ -115,6 +115,12 @@ export const highlights = pgTable(
     versionAbbreviation: text("version_abbreviation"),
     /** Short passage-text snippet (truncated), null if the fetch failed. */
     snippet: text("snippet"),
+    /** Version ID the snippet text was actually fetched from — differs from
+     * versionId when that version is unlicensed and the snippet fell back to
+     * the language's licensed version. Drives the copyright attribution,
+     * which must match the displayed text. Null on pre-7A rows (derived
+     * heuristically at read time) and when the snippet fetch failed. */
+    snippetVersionId: integer("snippet_version_id"),
     /** Highlight colour as returned by the API (hex without #). */
     color: text("color"),
     importedAt: timestamp("imported_at", { withTimezone: true })
