@@ -27,6 +27,7 @@
 // NextAuth — it stays the signed sessionStorage token from Step 8.
 
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
+import { and, eq } from "drizzle-orm";
 import NextAuth from "next-auth";
 import type { OAuthConfig } from "next-auth/providers";
 import { db } from "@/db";
@@ -130,6 +131,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // page, per the step spec.
     signIn: "/",
     error: "/",
+  },
+  events: {
+    // The adapter writes the accounts row only when the account is first
+    // linked — repeat sign-ins would otherwise keep the original (possibly
+    // expired, or narrower-scoped) access token forever. Step 7's highlight
+    // import reads accounts.access_token, so refresh the stored tokens on
+    // every OAuth sign-in.
+    async signIn({ account }) {
+      if (!account?.access_token) return;
+      await db
+        .update(accounts)
+        .set({
+          access_token: account.access_token,
+          refresh_token: account.refresh_token ?? null,
+          expires_at: account.expires_at ?? null,
+          scope: account.scope ?? null,
+          token_type: account.token_type ?? null,
+          id_token: account.id_token ?? null,
+        })
+        .where(
+          and(
+            eq(accounts.provider, account.provider),
+            eq(accounts.providerAccountId, account.providerAccountId),
+          ),
+        );
+    },
   },
   callbacks: {
     session({ session, user }) {
