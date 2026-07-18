@@ -1,6 +1,7 @@
 "use client";
 
-import type { ButtonHTMLAttributes } from "react";
+import Link from "next/link";
+import type { ButtonHTMLAttributes, ComponentProps } from "react";
 
 type Variant = "primary" | "secondary" | "ghost" | "destructive";
 
@@ -37,6 +38,26 @@ export function Button({
   return (
     <button
       type={type}
+      className={`${base} ${variants[variant]} ${full ? "w-full" : ""} ${className}`}
+      {...props}
+    />
+  );
+}
+
+export interface ButtonLinkProps extends ComponentProps<typeof Link> {
+  variant?: Variant;
+  full?: boolean;
+}
+
+/** A navigation link in the pill button's clothes (Step 11). */
+export function ButtonLink({
+  variant = "primary",
+  full = false,
+  className = "",
+  ...props
+}: ButtonLinkProps) {
+  return (
+    <Link
       className={`${base} ${variants[variant]} ${full ? "w-full" : ""} ${className}`}
       {...props}
     />

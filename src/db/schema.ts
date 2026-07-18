@@ -134,6 +134,63 @@ export const bibleVersions = pgTable(
   (table) => [index("bible_versions_language_idx").on(table.language)],
 );
 
+// --- Reading plans (Step 11) ----------------------------------------------
+//
+// A plan is a structured list of day-by-day passage references — references
+// only, never Bible text (brief §8.4: YouVersion is the only source of
+// Scripture). Pre-defined plans are inserted by a seed migration; Step 12's
+// AI-generated plans land in these same tables so everything downstream
+// works identically for both origins.
+
+export const plans = pgTable("plans", {
+  /** Slug for seeded plans ("psalms-30"); UUID for generated ones (Step 12). */
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  /** One-line description shown on the plan library card. */
+  description: text("description").notNull(),
+  lengthDays: integer("length_days").notNull(),
+  /** "predefined" (seeded) or "generated" (Step 12, PlanBuilder). */
+  source: text("source").notNull().default("predefined"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const planDays = pgTable(
+  "plan_days",
+  {
+    planId: text("plan_id")
+      .notNull()
+      .references(() => plans.id, { onDelete: "cascade" }),
+    /** 1-based day number within the plan. */
+    dayNumber: integer("day_number").notNull(),
+    /** USFM passage reference, e.g. "PSA.23" — the shape fetchPassage takes. */
+    reference: text("reference").notNull(),
+    /** Human-readable label for the reference chip, e.g. "Psalm 23". */
+    label: text("label").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.planId, table.dayNumber] })],
+);
+
+// Private per-user progress (Path A only — Instant Access progress lives in
+// the signed anonymous token, no database row). One row per user: Home and
+// the plan view assume a single active plan, so selecting a new plan
+// replaces the row. Never joined into any circle-facing view — the brief's
+// no-comparison constraint means progress is visible to its owner only.
+export const userPlanProgress = pgTable("user_plan_progress", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  planId: text("plan_id")
+    .notNull()
+    .references(() => plans.id, { onDelete: "cascade" }),
+  startedAt: timestamp("started_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  /** Day numbers completed via "Finished reading" (Step 14 writes these). */
+  completedDays: integer("completed_days").array().notNull().default([]),
+});
+
 export const agentLogs = pgTable("agent_logs", {
   id: serial("id").primaryKey(),
   /** Agent that made the call, e.g. "facilitator"; "dev" for dev routes. */

@@ -1,4 +1,4 @@
-export { Button, type ButtonProps } from "./button";
+export { Button, ButtonLink, type ButtonProps } from "./button";
 export { TextInput, TextArea } from "./input";
 export { Card, type CardProps } from "./card";
 export { Avatar, AvatarChip } from "./avatar";

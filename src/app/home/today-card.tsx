@@ -1,6 +1,6 @@
 import { BookOpen, Sun } from "lucide-react";
 import Image from "next/image";
-import { Button, Card, SectionLabel } from "@/components/ui";
+import { Button, ButtonLink, Card, SectionLabel } from "@/components/ui";
 import watercolour from "@/assets/home_page_asset_1.png";
 
 export interface TodayReading {
@@ -62,10 +62,19 @@ export function TodayCard({ reading = null }: { reading?: TodayReading | null })
           </>
         )}
 
-        <Button full disabled={!reading} className="mt-1">
-          <BookOpen size={18} aria-hidden />
-          Start reading
-        </Button>
+        {/* Step 13 repoints this at the passage view; until then the plan
+            screen is the reading destination. */}
+        {reading ? (
+          <ButtonLink href="/plan" full className="mt-1">
+            <BookOpen size={18} aria-hidden />
+            Start reading
+          </ButtonLink>
+        ) : (
+          <Button full disabled className="mt-1">
+            <BookOpen size={18} aria-hidden />
+            Start reading
+          </Button>
+        )}
       </div>
     </Card>
   );

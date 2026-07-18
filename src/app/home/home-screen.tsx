@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { findSupportedVersion } from "@/config/bible-versions";
 import { CircleCard } from "./circle-card";
-import { TodayCard } from "./today-card";
+import { TodayCard, type TodayReading } from "./today-card";
 
 const LANGUAGE_NAMES: Record<string, string> = {
   en: "English",
@@ -30,11 +30,14 @@ export function HomeScreen({
   language,
   bibleVersionId,
   isAnonymous,
+  reading = null,
 }: {
   displayName: string;
   language: string | null;
   bibleVersionId: number | null;
   isAnonymous: boolean;
+  /** Today's reading from the active plan (Step 11); null until selected. */
+  reading?: TodayReading | null;
 }) {
   const version =
     bibleVersionId === null ? null : findSupportedVersion(bibleVersionId);
@@ -62,7 +65,7 @@ export function HomeScreen({
         </h1>
       </div>
 
-      <TodayCard />
+      <TodayCard reading={reading} />
 
       <CircleCard />
 
