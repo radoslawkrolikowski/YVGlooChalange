@@ -8,7 +8,7 @@ export interface ConsoleAgent {
   displayName: string;
   description: string;
   tier: 1 | 2 | 3;
-  implementation: "shell" | "stub";
+  implementation: "real" | "shell" | "stub";
   /** Pretty-printed JSON of the agent's sample input. */
   sampleInput: string;
 }
@@ -53,7 +53,7 @@ export function AgentConsole({ agents }: { agents: ConsoleAgent[] }) {
                 {agent.displayName}
               </h2>
               <Badge status="neutral">tier {agent.tier}</Badge>
-              <Badge status={agent.implementation === "shell" ? "active" : "neutral"}>
+              <Badge status={agent.implementation === "stub" ? "neutral" : "active"}>
                 {agent.implementation}
               </Badge>
             </div>
