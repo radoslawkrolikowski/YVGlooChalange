@@ -8,6 +8,7 @@ import {
   Card,
   Divider,
   SectionLabel,
+  VersionAttribution,
 } from "@/components/ui";
 import type { HighlightSummary } from "@/lib/highlights";
 
@@ -97,6 +98,10 @@ export function HighlightsCard({
                   &ldquo;{entry.snippet}&rdquo;
                 </p>
               )}
+              {entry.attribution &&
+                summary.sample[index + 1]?.versionId !== entry.versionId && (
+                  <VersionAttribution text={entry.attribution} />
+                )}
             </li>
           ))}
         </ul>

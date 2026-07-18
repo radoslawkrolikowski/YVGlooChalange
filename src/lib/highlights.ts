@@ -22,6 +22,7 @@ import {
 import { HIGHLIGHT_SCAN_CHAPTERS } from "@/config/highlight-scan";
 import { db } from "@/db";
 import { accounts, highlights, users } from "@/db/schema";
+import { resolveVersionAttributions } from "@/lib/version-attribution";
 import {
   fetchChapterHighlights,
   fetchPassageSnippet,
@@ -45,7 +46,11 @@ export interface HighlightSummary {
   sample: {
     id: number;
     label: string;
+    versionId: number;
     versionAbbreviation: string | null;
+    /** Copyright attribution of the version the highlight was made in —
+     * displayed with the snippet per the global attribution constraint. */
+    attribution: string | null;
     snippet: string | null;
     importedAt: string;
   }[];
@@ -307,6 +312,7 @@ export async function loadHighlightSummary(
       id: highlights.id,
       reference: highlights.reference,
       label: highlights.label,
+      versionId: highlights.versionId,
       versionAbbreviation: highlights.versionAbbreviation,
       snippet: highlights.snippet,
       importedAt: highlights.importedAt,
@@ -315,12 +321,19 @@ export async function loadHighlightSummary(
     .where(eq(highlights.userId, userId))
     .orderBy(desc(highlights.importedAt), desc(highlights.id));
 
+  const sampleRows = rows.slice(0, sampleSize);
+  const attributions = await resolveVersionAttributions(
+    sampleRows.map((row) => row.versionId),
+  );
+
   return {
     count: rows.length,
-    sample: rows.slice(0, sampleSize).map((row) => ({
+    sample: sampleRows.map((row) => ({
       id: row.id,
       label: row.label ?? row.reference,
+      versionId: row.versionId,
       versionAbbreviation: row.versionAbbreviation,
+      attribution: attributions.get(row.versionId) ?? null,
       snippet: row.snippet,
       importedAt: row.importedAt.toISOString(),
     })),
