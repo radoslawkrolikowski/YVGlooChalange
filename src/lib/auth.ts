@@ -27,6 +27,7 @@
 // NextAuth — it stays the signed sessionStorage token from Step 8.
 
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
+import { and, eq } from "drizzle-orm";
 import NextAuth from "next-auth";
 import type { OAuthConfig } from "next-auth/providers";
 import { db } from "@/db";
@@ -86,7 +87,21 @@ function youVersionProvider(): OAuthConfig<YouVersionProfile> {
     checks: ["pkce", "state", "nonce"],
     authorization: {
       url: `https://${YOUVERSION_API_HOST}/auth/authorize`,
-      params: { scope: "openid profile email" },
+      // User-data permissions are NOT OAuth scopes on this gateway: apps ask
+      // for them with `requested_permissions` (comma-separable; values match
+      // SignInWithYouVersionPermission in the official SDK), and the OAuth
+      // callback reports `granted_permissions`. `highlights` authorises the
+      // User Highlights API — the permission only makes import *possible*;
+      // Round imports nothing until the user explicitly allows it on the
+      // in-app consent screen (Step 7). `require_user_interaction` forces
+      // YouVersion's consent screen on every sign-in: without it, an
+      // already-authorised user is silently re-issued their old grant and a
+      // permission added after their first sign-in would never be requested.
+      params: {
+        scope: "openid profile email",
+        requested_permissions: "highlights",
+        require_user_interaction: "true",
+      },
     },
     token: `https://${YOUVERSION_API_HOST}/auth/token`,
     // YouVersion has no userinfo endpoint — identity is carried in the ID
@@ -127,6 +142,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/",
     error: "/",
   },
+  events: {
+    // The adapter writes the accounts row only when the account is first
+    // linked — repeat sign-ins would otherwise keep the original (possibly
+    // expired, or narrower-scoped) access token forever. Step 7's highlight
+    // import reads accounts.access_token, so refresh the stored tokens on
+    // every OAuth sign-in.
+    async signIn({ account }) {
+      if (!account?.access_token) return;
+      await db
+        .update(accounts)
+        .set({
+          access_token: account.access_token,
+          refresh_token: account.refresh_token ?? null,
+          expires_at: account.expires_at ?? null,
+          scope: account.scope ?? null,
+          token_type: account.token_type ?? null,
+          id_token: account.id_token ?? null,
+        })
+        .where(
+          and(
+            eq(accounts.provider, account.provider),
+            eq(accounts.providerAccountId, account.providerAccountId),
+          ),
+        );
+    },
+  },
   callbacks: {
     session({ session, user }) {
       // `user` is the full users row from the adapter — surface the fields
@@ -134,6 +175,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.id = user.id;
       session.user.language = user.language ?? null;
       session.user.bibleVersionId = user.bibleVersionId ?? null;
+      session.user.highlightsConsent = user.highlightsConsent ?? null;
       return session;
     },
   },
@@ -143,6 +185,7 @@ declare module "next-auth" {
   interface User {
     language?: string | null;
     bibleVersionId?: number | null;
+    highlightsConsent?: string | null;
   }
   interface Session {
     user: {
@@ -152,6 +195,8 @@ declare module "next-auth" {
       image?: string | null;
       language: string | null;
       bibleVersionId: number | null;
+      /** Step 7 consent state: "granted" | "declined" | "revoked" | null. */
+      highlightsConsent: string | null;
     };
   }
 }

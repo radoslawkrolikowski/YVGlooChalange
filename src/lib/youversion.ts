@@ -85,6 +85,15 @@ export interface BibleIndex {
   books: BibleIndexBook[];
 }
 
+export interface UserHighlight {
+  /** USFM passage reference of the highlighted verse, e.g. "PSA.23.1". */
+  reference: string;
+  /** Numeric YouVersion version ID the highlight was made in. */
+  versionId: number;
+  /** Highlight colour, 6-char hex without "#". */
+  color: string;
+}
+
 // The versions endpoint takes ISO 639-3 language ranges; the app speaks
 // ISO 639-1 (en/es/pt) everywhere else. Two-letter codes are mapped, and
 // three-letter codes pass through so any 639-3 tag works directly.
@@ -118,15 +127,19 @@ export function toLanguageRange(language: string): string {
   return tag;
 }
 
+function appKey(): string {
+  const key = process.env.YOUVERSION_API_KEY;
+  if (!key) {
+    throw new Error("YOUVERSION_API_KEY is not set — see .env.example");
+  }
+  return key;
+}
+
 let cachedBibleClient: BibleClient | null = null;
 
 function bibleClient(): BibleClient {
   if (!cachedBibleClient) {
-    const appKey = process.env.YOUVERSION_API_KEY;
-    if (!appKey) {
-      throw new Error("YOUVERSION_API_KEY is not set — see .env.example");
-    }
-    cachedBibleClient = new BibleClient(new ApiClient({ appKey }));
+    cachedBibleClient = new BibleClient(new ApiClient({ appKey: appKey() }));
   }
   return cachedBibleClient;
 }
@@ -231,6 +244,84 @@ export async function validatePassageReference(
     }
     throw error;
   }
+}
+
+/**
+ * Fetch the signed-in user's highlights within one chapter of one version —
+ * the User Highlights API behind Step 7's opt-in import. The gateway only
+ * answers single-chapter queries (`bible_id` + chapter `passage_id`); there
+ * is no "all my highlights" call, so import is a scan of curated chapters
+ * plus per-chapter sync as the user reads. Called directly (not through the
+ * SDK's HighlightsClient, which sends the token as a `lat` query parameter
+ * and names the field `version_id` — the live gateway requires an
+ * `Authorization: Bearer` header and returns `bible_id`). Requires the
+ * user's OAuth access token with the `highlights` permission (granted via
+ * `requested_permissions` at sign-in); the app key alone cannot read user
+ * data. Returns one entry per highlighted verse.
+ */
+export async function fetchChapterHighlights(
+  accessToken: string,
+  versionId: number,
+  chapterUsfm: string,
+): Promise<UserHighlight[]> {
+  const endpoint = `highlights in ${chapterUsfm} version ${versionId}`;
+  const url = new URL("https://api.youversion.com/v1/highlights");
+  url.searchParams.set("bible_id", String(versionId));
+  url.searchParams.set("passage_id", chapterUsfm);
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "x-yvp-app-key": appKey(),
+    },
+    cache: "no-store",
+  });
+
+  if (response.status === 204) return [];
+  if (!response.ok) {
+    throw new YouVersionApiError(
+      `YouVersion ${endpoint} failed (${response.status})`,
+      response.status,
+      endpoint,
+      await response.text().catch(() => undefined),
+    );
+  }
+
+  const body = (await response.json()) as {
+    data?: { bible_id: number; passage_id: string; color: string }[];
+  };
+  return (body.data ?? []).map((h) => ({
+    reference: h.passage_id,
+    versionId: h.bible_id,
+    color: h.color,
+  }));
+}
+
+/**
+ * Fetch a short passage snippet plus its human-readable reference for an
+ * imported highlight. Lighter than fetchPassage: skips the version-metadata
+ * round-trip (the import loop resolves each distinct version's abbreviation
+ * once itself).
+ */
+export async function fetchPassageSnippet(
+  reference: string,
+  versionId: number,
+): Promise<{ label: string; text: string }> {
+  const endpoint = `snippet ${reference} in version ${versionId}`;
+  const passage = await callSdk(endpoint, () =>
+    bibleClient().getPassage(versionId, reference, "text"),
+  );
+  if (!passage.content) {
+    throw new YouVersionApiError(
+      `Passage response for ${reference} contained no content`,
+      502,
+      endpoint,
+    );
+  }
+  return {
+    label: passage.reference || reference,
+    text: passage.content,
+  };
 }
 
 /** Fetch a single Bible version record by its numeric ID. */

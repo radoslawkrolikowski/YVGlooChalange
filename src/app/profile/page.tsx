@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { loadHighlightSummary } from "@/lib/highlights";
 import { loadUserProfileAnswers } from "@/lib/profile";
 import { AnonProfile } from "./anon-profile";
 import { UserProfile } from "./user-profile";
@@ -18,6 +19,8 @@ export default async function ProfilePage() {
         language={session.user.language}
         bibleVersionId={session.user.bibleVersionId}
         profileAnswers={await loadUserProfileAnswers(session.user.id)}
+        highlightSummary={await loadHighlightSummary(session.user.id)}
+        highlightsConsent={session.user.highlightsConsent}
       />
     );
   }
