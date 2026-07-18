@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  boolean,
   index,
   integer,
   pgSequence,
@@ -7,6 +9,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
 
@@ -173,23 +176,37 @@ export const planDays = pgTable(
 );
 
 // Private per-user progress (Path A only — Instant Access progress lives in
-// the signed anonymous token, no database row). One row per user: Home and
-// the plan view assume a single active plan, so selecting a new plan
-// replaces the row. Never joined into any circle-facing view — the brief's
-// no-comparison constraint means progress is visible to its owner only.
-export const userPlanProgress = pgTable("user_plan_progress", {
-  userId: text("user_id")
-    .primaryKey()
-    .references(() => users.id, { onDelete: "cascade" }),
-  planId: text("plan_id")
-    .notNull()
-    .references(() => plans.id, { onDelete: "cascade" }),
-  startedAt: timestamp("started_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  /** Day numbers completed via "Finished reading" (Step 14 writes these). */
-  completedDays: integer("completed_days").array().notNull().default([]),
-});
+// the signed anonymous token, no database row). One row per (user, plan):
+// exactly one row is active at a time (partial unique index below) — Home
+// and the plan view still assume a single active plan — but selecting a new
+// plan pauses the previous row instead of overwriting it, so completed_days
+// survives and a paused plan resumes where it left off (Step 12A). Never
+// joined into any circle-facing view — the brief's no-comparison constraint
+// means progress is visible to its owner only.
+export const userPlanProgress = pgTable(
+  "user_plan_progress",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    planId: text("plan_id")
+      .notNull()
+      .references(() => plans.id, { onDelete: "cascade" }),
+    /** The active-plan pointer: true on at most one row per user. */
+    isActive: boolean("is_active").notNull().default(false),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** Day numbers completed via "Finished reading" (Step 14 writes these). */
+    completedDays: integer("completed_days").array().notNull().default([]),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.planId] }),
+    uniqueIndex("user_plan_progress_one_active_idx")
+      .on(table.userId)
+      .where(sql`${table.isActive}`),
+  ],
+);
 
 export const agentLogs = pgTable("agent_logs", {
   id: serial("id").primaryKey(),

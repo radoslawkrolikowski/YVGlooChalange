@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, not } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { plans, userPlanProgress } from "@/db/schema";
@@ -8,13 +8,15 @@ import { resolveSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-// Step 11: the session's active reading plan.
+// Step 11 (+12A): the session's active reading plan.
 //
 // GET returns the resolved PlanState (or state: null when no plan is
-// selected). POST selects a plan: Path A upserts the private
-// user_plan_progress row (one active plan per user — re-selecting replaces
-// it and resets progress); Path B re-mints the signed anonymous token with
-// the plan state, same mechanism as /api/session/preferences.
+// selected). POST selects a plan: Path A pauses the current active
+// user_plan_progress row and activates a row for the chosen plan — an
+// existing paused row resumes with its completed_days intact, a first-time
+// choice inserts a fresh row; progress is never reset. Path B re-mints the
+// signed anonymous token with the plan state, same mechanism as
+// /api/session/preferences.
 
 export async function GET(request: Request) {
   const session = await resolveSession(request);
@@ -71,12 +73,27 @@ export async function POST(request: Request) {
   }
 
   if (session.kind === "user") {
+    // Pause first, then activate: the partial unique index allows only one
+    // active row per user, so the order matters (the Neon HTTP driver has
+    // no interactive transactions). If the second statement failed the user
+    // would briefly have no active plan — recoverable by re-selecting.
+    await db
+      .update(userPlanProgress)
+      .set({ isActive: false })
+      .where(
+        and(
+          eq(userPlanProgress.userId, session.userId),
+          not(eq(userPlanProgress.planId, planId)),
+        ),
+      );
     await db
       .insert(userPlanProgress)
-      .values({ userId: session.userId, planId })
+      .values({ userId: session.userId, planId, isActive: true })
       .onConflictDoUpdate({
-        target: userPlanProgress.userId,
-        set: { planId, startedAt: new Date(), completedDays: [] },
+        target: [userPlanProgress.userId, userPlanProgress.planId],
+        // Resuming a paused plan: reactivate only — completed_days and
+        // started_at survive, per Step 12A.
+        set: { isActive: true },
       });
     return NextResponse.json({ ok: true });
   }

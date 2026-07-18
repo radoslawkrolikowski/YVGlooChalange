@@ -8,16 +8,25 @@ import {
   EmptyState,
   SectionLabel,
 } from "@/components/ui";
-import type { PlanState } from "@/lib/plans";
+import type { PausedPlanSummary, PlanState } from "@/lib/plans";
+import { PausedPlans } from "./paused-plans";
 
 /*
  * The /plan tab (Step 11), composed in the 8C register: "MY PLAN" icon-chip
  * label, the current day as the screen's hero card with "Continue reading"
  * as the single primary action, and the scrollable day list below. The
  * primary action stays disabled until Step 13 builds the passage view it
- * will open. Progress shown here is private to this user only.
+ * will open. Step 12A adds the "Your plans" paused-plan section beneath the
+ * day list — hidden entirely when there is nothing paused. Progress shown
+ * here is private to this user only.
  */
-export function PlanScreen({ state }: { state: PlanState }) {
+export function PlanScreen({
+  state,
+  pausedPlans = [],
+}: {
+  state: PlanState;
+  pausedPlans?: PausedPlanSummary[];
+}) {
   const { plan, days, currentDay, completedDays, today } = state;
 
   return (
@@ -52,6 +61,8 @@ export function PlanScreen({ state }: { state: PlanState }) {
         />
       </Card>
 
+      {pausedPlans.length > 0 && <PausedPlans plans={pausedPlans} />}
+
       <p className="text-center text-sm text-ink-faint">
         <Link
           href="/onboarding/plan"
@@ -64,14 +75,24 @@ export function PlanScreen({ state }: { state: PlanState }) {
   );
 }
 
-/** No plan selected yet — the tab's designed empty state. */
-export function PlanEmptyState() {
+/**
+ * No active plan — the tab's designed empty state. Paused plans still render
+ * beneath it (a user whose switch was interrupted can always resume).
+ */
+export function PlanEmptyState({
+  pausedPlans = [],
+}: {
+  pausedPlans?: PausedPlanSummary[];
+}) {
   return (
-    <EmptyState
-      icon="📖"
-      heading="No reading plan yet"
-      subtext="Pick a plan and every day gets its passage — read at your own pace."
-      cta={<ButtonLink href="/onboarding/plan">Choose a plan</ButtonLink>}
-    />
+    <div className="flex flex-col gap-6">
+      <EmptyState
+        icon="📖"
+        heading="No reading plan yet"
+        subtext="Pick a plan and every day gets its passage — read at your own pace."
+        cta={<ButtonLink href="/onboarding/plan">Choose a plan</ButtonLink>}
+      />
+      {pausedPlans.length > 0 && <PausedPlans plans={pausedPlans} />}
+    </div>
   );
 }

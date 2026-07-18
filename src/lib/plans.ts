@@ -5,7 +5,7 @@
 // reads the plan state carried in the signed anonymous token. Both resolve
 // through the same PlanState shape so every screen renders identically.
 
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, not } from "drizzle-orm";
 import { db } from "@/db";
 import { planDays, plans, userPlanProgress } from "@/db/schema";
 import type { AnonPlanState } from "@/lib/anon-session";
@@ -108,9 +108,54 @@ export async function loadUserPlanState(
       completedDays: userPlanProgress.completedDays,
     })
     .from(userPlanProgress)
-    .where(eq(userPlanProgress.userId, userId));
+    .where(
+      and(
+        eq(userPlanProgress.userId, userId),
+        eq(userPlanProgress.isActive, true),
+      ),
+    );
   if (!progress) return null;
   return buildPlanState(progress.planId, progress.completedDays);
+}
+
+/** A paused plan on the /plan "Your plans" list — owner's eyes only. */
+export interface PausedPlanSummary {
+  id: string;
+  name: string;
+  lengthDays: number;
+  /** Days finished before the plan was paused — the "n of m days" figure. */
+  completedCount: number;
+}
+
+/**
+ * Path A: the user's paused plans, most recently started first (Step 12A).
+ * Includes their own generated plans after replacement — paused rows are
+ * never deleted, so progress survives and any entry can be resumed. Private
+ * to the owner; never joined into any circle-facing view.
+ */
+export async function listPausedPlans(
+  userId: string,
+): Promise<PausedPlanSummary[]> {
+  const rows = await db
+    .select({
+      id: plans.id,
+      name: plans.name,
+      lengthDays: plans.lengthDays,
+      completedDays: userPlanProgress.completedDays,
+    })
+    .from(userPlanProgress)
+    .innerJoin(plans, eq(plans.id, userPlanProgress.planId))
+    .where(
+      and(
+        eq(userPlanProgress.userId, userId),
+        not(userPlanProgress.isActive),
+      ),
+    )
+    .orderBy(desc(userPlanProgress.startedAt));
+  return rows.map(({ completedDays, ...plan }) => ({
+    ...plan,
+    completedCount: completedDays.length,
+  }));
 }
 
 /**
