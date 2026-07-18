@@ -91,7 +91,14 @@ function youVersionProvider(): OAuthConfig<YouVersionProfile> {
       // official SDK) authorises the User Highlights API. The OAuth scope
       // only makes import *possible* — Round imports nothing until the user
       // explicitly allows it on the in-app consent screen (Step 7).
-      params: { scope: "openid profile email highlights" },
+      // `require_user_interaction` forces YouVersion's consent screen on
+      // every sign-in: without it, an already-authorised user is silently
+      // re-issued their *old* grant, so a scope added after their first
+      // sign-in (highlights) would never be requested from them.
+      params: {
+        scope: "openid profile email highlights",
+        require_user_interaction: "true",
+      },
     },
     token: `https://${YOUVERSION_API_HOST}/auth/token`,
     // YouVersion has no userinfo endpoint — identity is carried in the ID
