@@ -25,9 +25,9 @@ import { ONBOARDING_STEPS } from "../onboarding-screen";
 /*
  * Onboarding step 2 of 3 (Step 10): the profile questions, paged as small
  * groups per the step spec — goals, journey, topics — inside the same shell
- * and progress indicator as step 1. Until Step 11 builds plan selection,
- * finishing lands on Home. Path B sees a clearly visible skip that keeps the
- * defaults; every answer is optional on both paths.
+ * and progress indicator as step 1. Finishing continues to plan selection
+ * (Step 11). Path B sees a clearly visible skip that keeps the defaults;
+ * every answer is optional on both paths.
  */
 
 const PAGES: {
@@ -86,7 +86,7 @@ export function AboutScreen({
     setError(null);
     try {
       await saveProfileAnswers(answers);
-      router.push("/home");
+      router.push("/onboarding/plan");
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : "Something went wrong",
@@ -133,7 +133,7 @@ export function AboutScreen({
             </Button>
           )}
           <Button className="flex-1" onClick={continueOrFinish} disabled={saving}>
-            {saving ? "Saving…" : isLastPage ? "Finish" : "Continue"}
+            {saving ? "Saving…" : "Continue"}
           </Button>
         </div>
 

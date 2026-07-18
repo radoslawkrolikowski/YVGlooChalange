@@ -11,6 +11,15 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { DEFAULT_VERSION_BY_LANGUAGE } from "@/config/bible-versions";
 import type { ProfileAnswers } from "@/config/profile";
 
+/** Path B mirror of the user_plan_progress row (Step 11). */
+export interface AnonPlanState {
+  planId: string;
+  /** Epoch ms — token payloads stay plain JSON. */
+  startedAt: number;
+  /** Day numbers completed via "Finished reading" (Step 14 writes these). */
+  completedDays: number[];
+}
+
 export interface AnonSession {
   kind: "anonymous";
   /** Random ID; later steps tag anonymous reflections with it (Step 30). */
@@ -23,8 +32,12 @@ export interface AnonSession {
   language: string;
   /** Default until changed in onboarding (Step 9): NIV. */
   bibleVersionId: number;
-  /** Reading plan placeholder — real plan selection arrives in Step 11. */
-  planId: null;
+  /**
+   * Selected reading plan and private progress (Step 11). Null until the
+   * visitor picks a plan. Held in the token because Path B has no database
+   * row — the user_plan_progress table is Path A only.
+   */
+  plan: AnonPlanState | null;
   /**
    * True once the visitor explicitly chose language/version (Step 9) —
    * distinguishes a real choice from the minted defaults. Absent on tokens
@@ -68,7 +81,7 @@ export function mintAnonSession(readerNumber: number): {
     displayName: `Reader #${readerNumber}`,
     language: "en",
     bibleVersionId: DEFAULT_VERSION_BY_LANGUAGE.en,
-    planId: null,
+    plan: null,
     issuedAt: Date.now(),
   };
   return { token: signSession(session), session };
@@ -99,6 +112,22 @@ export function remintAnonSession(
  * (Step 10) — same replacement-token mechanism as remintAnonSession, same
  * carried-over identity.
  */
+/**
+ * Re-mints an existing anonymous session with a newly selected reading plan
+ * (Step 11) — same replacement-token mechanism, same carried-over identity.
+ * Selecting a plan resets progress, matching Path A's row replacement.
+ */
+export function remintAnonPlan(
+  current: AnonSession,
+  planId: string,
+): { token: string; session: AnonSession } {
+  const session: AnonSession = {
+    ...current,
+    plan: { planId, startedAt: Date.now(), completedDays: [] },
+  };
+  return { token: signSession(session), session };
+}
+
 export function remintAnonProfile(
   current: AnonSession,
   profile: ProfileAnswers,
@@ -127,7 +156,9 @@ export function verifyAnonSessionToken(token: string): AnonSession | null {
     const session = JSON.parse(
       Buffer.from(payload, "base64url").toString("utf8"),
     ) as AnonSession;
-    return session.kind === "anonymous" ? session : null;
+    if (session.kind !== "anonymous") return null;
+    // Tokens minted before Step 11 have no `plan` key; normalise to null.
+    return { ...session, plan: session.plan ?? null };
   } catch {
     return null;
   }

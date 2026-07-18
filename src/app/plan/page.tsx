@@ -1,29 +1,33 @@
-"use client";
-
+import { HeaderMenu } from "@/components/layout/header-menu";
 import { AppShell } from "@/components/layout/app-shell";
-import { EmptyState, SkeletonText } from "@/components/ui";
-import { useAnonSession } from "@/lib/use-anon-session";
-import { UpgradeBanner } from "../home/upgrade-banner";
+import { auth } from "@/lib/auth";
+import { loadUserPlanState } from "@/lib/plans";
+import { AnonPlanTab } from "./anon-plan-tab";
+import { PlanEmptyState, PlanScreen } from "./plan-screen";
 
-// Placeholder tab target (Step 8A shell). Reading plans arrive with Step 11.
-export default function PlanPage() {
-  const session = useAnonSession();
+export const dynamic = "force-dynamic";
 
-  if (!session) {
+// The /plan tab (Step 11), mirroring /home's session split: Path A resolves
+// the plan server-side; everyone else falls through to the client-side
+// Instant Access guard.
+export default async function PlanPage() {
+  const session = await auth();
+
+  if (session?.user) {
+    const state = await loadUserPlanState(session.user.id);
     return (
-      <AppShell>
-        <SkeletonText lines={4} />
+      <AppShell
+        headerAction={
+          <HeaderMenu
+            displayName={session.user.name ?? "YouVersion reader"}
+            isAnonymous={false}
+          />
+        }
+      >
+        {state ? <PlanScreen state={state} /> : <PlanEmptyState />}
       </AppShell>
     );
   }
 
-  return (
-    <AppShell banner={<UpgradeBanner />}>
-      <EmptyState
-        icon="📖"
-        heading="No reading plan yet"
-        subtext="Reading plans are on their way. You will pick or create one here."
-      />
-    </AppShell>
-  );
+  return <AnonPlanTab />;
 }

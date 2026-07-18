@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { HeaderMenu } from "@/components/layout/header-menu";
 import { AppShell } from "@/components/layout/app-shell";
 import { auth } from "@/lib/auth";
+import { loadUserPlanState } from "@/lib/plans";
 import { AnonHome } from "./anon-home";
 import { HomeScreen } from "./home-screen";
 
@@ -18,6 +19,7 @@ export default async function HomePage() {
     // fetch and translation target (Step 9).
     if (session.user.language === null) redirect("/onboarding");
     const displayName = session.user.name ?? "YouVersion reader";
+    const planState = await loadUserPlanState(session.user.id);
     return (
       <AppShell
         headerAction={
@@ -29,6 +31,14 @@ export default async function HomePage() {
           language={session.user.language}
           bibleVersionId={session.user.bibleVersionId}
           isAnonymous={false}
+          reading={
+            planState
+              ? {
+                  dayNumber: planState.currentDay,
+                  passageReference: planState.today.label,
+                }
+              : null
+          }
         />
       </AppShell>
     );
