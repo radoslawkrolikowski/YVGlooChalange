@@ -17,6 +17,7 @@
 import {
   ApiClient,
   BibleClient,
+  HighlightsClient,
   type BibleVersion as SdkBibleVersion,
 } from "@youversion/platform-core";
 
@@ -85,6 +86,15 @@ export interface BibleIndex {
   books: BibleIndexBook[];
 }
 
+export interface UserHighlight {
+  /** USFM passage reference of the highlighted verse, e.g. "PSA.23.1". */
+  reference: string;
+  /** Numeric YouVersion version ID the highlight was made in. */
+  versionId: number;
+  /** Highlight colour, 6-char hex without "#". */
+  color: string;
+}
+
 // The versions endpoint takes ISO 639-3 language ranges; the app speaks
 // ISO 639-1 (en/es/pt) everywhere else. Two-letter codes are mapped, and
 // three-letter codes pass through so any 639-3 tag works directly.
@@ -118,17 +128,33 @@ export function toLanguageRange(language: string): string {
   return tag;
 }
 
+let cachedApiClient: ApiClient | null = null;
 let cachedBibleClient: BibleClient | null = null;
+let cachedHighlightsClient: HighlightsClient | null = null;
 
-function bibleClient(): BibleClient {
-  if (!cachedBibleClient) {
+function apiClient(): ApiClient {
+  if (!cachedApiClient) {
     const appKey = process.env.YOUVERSION_API_KEY;
     if (!appKey) {
       throw new Error("YOUVERSION_API_KEY is not set — see .env.example");
     }
-    cachedBibleClient = new BibleClient(new ApiClient({ appKey }));
+    cachedApiClient = new ApiClient({ appKey });
+  }
+  return cachedApiClient;
+}
+
+function bibleClient(): BibleClient {
+  if (!cachedBibleClient) {
+    cachedBibleClient = new BibleClient(apiClient());
   }
   return cachedBibleClient;
+}
+
+function highlightsClient(): HighlightsClient {
+  if (!cachedHighlightsClient) {
+    cachedHighlightsClient = new HighlightsClient(apiClient());
+  }
+  return cachedHighlightsClient;
 }
 
 // The SDK throws plain Errors with a numeric `status` property attached for
@@ -231,6 +257,54 @@ export async function validatePassageReference(
     }
     throw error;
   }
+}
+
+/**
+ * Fetch the signed-in user's existing highlights — the User Highlights API
+ * behind Step 7's opt-in import. Requires the user's OAuth access token
+ * (`highlights` scope); the app key alone cannot read user data. Returns one
+ * entry per highlighted verse (the API returns a colour per verse, without
+ * ranges).
+ */
+export async function fetchUserHighlights(
+  accessToken: string,
+): Promise<UserHighlight[]> {
+  const endpoint = "user highlights";
+  const collection = await callSdk(endpoint, () =>
+    highlightsClient().getHighlights(undefined, accessToken),
+  );
+  return collection.data.map((h) => ({
+    reference: h.passage_id,
+    versionId: h.version_id,
+    color: h.color,
+  }));
+}
+
+/**
+ * Fetch a short passage snippet plus its human-readable reference for an
+ * imported highlight. Lighter than fetchPassage: skips the version-metadata
+ * round-trip (the import loop resolves each distinct version's abbreviation
+ * once itself).
+ */
+export async function fetchPassageSnippet(
+  reference: string,
+  versionId: number,
+): Promise<{ label: string; text: string }> {
+  const endpoint = `snippet ${reference} in version ${versionId}`;
+  const passage = await callSdk(endpoint, () =>
+    bibleClient().getPassage(versionId, reference, "text"),
+  );
+  if (!passage.content) {
+    throw new YouVersionApiError(
+      `Passage response for ${reference} contained no content`,
+      502,
+      endpoint,
+    );
+  }
+  return {
+    label: passage.reference || reference,
+    text: passage.content,
+  };
 }
 
 /** Fetch a single Bible version record by its numeric ID. */

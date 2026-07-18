@@ -1,6 +1,6 @@
 "use client";
 
-import { Highlighter, KeyRound } from "lucide-react";
+import { KeyRound } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
@@ -8,35 +8,38 @@ import { HeaderMenu } from "@/components/layout/header-menu";
 import {
   Avatar,
   Badge,
-  Banner,
   Button,
   Card,
-  Divider,
   SectionLabel,
 } from "@/components/ui";
 import type { ProfileAnswers } from "@/config/profile";
+import type { HighlightSummary } from "@/lib/highlights";
 import { AboutYouCard } from "./about-you-card";
+import { HighlightsCard } from "./highlights-card";
 import { ReadingSettingsCard } from "./reading-settings-card";
 
 /*
  * Signed-in profile (Step 6, recomposed in Step 8C): identity header,
  * reading settings (moved from Home), imported highlights, and account —
  * all in the Home screen's register (icon-chip labels, serif headings).
- * The highlights section keeps the production layout with an explanatory
- * empty state until Step 7 imports real highlights.
+ * The highlights section (Step 7) shows the live imported count with sample
+ * entries and the revoke/delete flow.
  */
 export function UserProfile({
   displayName,
   language,
   bibleVersionId,
   profileAnswers,
+  highlightSummary,
+  highlightsConsent,
 }: {
   displayName: string;
   language: string | null;
   bibleVersionId: number | null;
   profileAnswers: ProfileAnswers;
+  highlightSummary: HighlightSummary;
+  highlightsConsent: string | null;
 }) {
-  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   async function handleSignOut() {
@@ -71,46 +74,10 @@ export function UserProfile({
 
         <AboutYouCard answers={profileAnswers} isDefaults={false} />
 
-        <Card className="flex flex-col gap-3">
-          <SectionLabel icon={<Highlighter size={14} aria-hidden />}>
-            Highlights
-          </SectionLabel>
-          <h2 className="font-serif text-lg font-semibold tracking-tight text-ink">
-            Imported highlights
-          </h2>
-          <p className="text-2xl font-bold text-ink">
-            0 <span className="text-sm font-normal text-ink-soft">highlights</span>
-          </p>
-          <p className="text-sm text-ink-soft">
-            Highlight import arrives with the next update. You&rsquo;ll choose
-            exactly what is imported and why before anything is stored.
-          </p>
-          <Divider />
-          {confirmingRevoke ? (
-            <div className="flex flex-col gap-2">
-              <Banner tone="warning">
-                Delete all imported highlights from Round? This cannot be
-                undone. Your highlights in the YouVersion app are not affected.
-              </Banner>
-              <div className="flex gap-2">
-                <Button variant="destructive" disabled className="flex-1">
-                  Delete highlights
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => setConfirmingRevoke(false)}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Button variant="ghost" onClick={() => setConfirmingRevoke(true)}>
-              Revoke &amp; delete imported highlights
-            </Button>
-          )}
-        </Card>
+        <HighlightsCard
+          initialSummary={highlightSummary}
+          consent={highlightsConsent}
+        />
 
         <Card className="flex flex-col gap-3">
           <SectionLabel icon={<KeyRound size={14} aria-hidden />}>

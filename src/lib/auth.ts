@@ -86,7 +86,11 @@ function youVersionProvider(): OAuthConfig<YouVersionProfile> {
     checks: ["pkce", "state", "nonce"],
     authorization: {
       url: `https://${YOUVERSION_API_HOST}/auth/authorize`,
-      params: { scope: "openid profile email" },
+      // `highlights` (SignInWithYouVersionPermission.highlights in the
+      // official SDK) authorises the User Highlights API. The OAuth scope
+      // only makes import *possible* — Round imports nothing until the user
+      // explicitly allows it on the in-app consent screen (Step 7).
+      params: { scope: "openid profile email highlights" },
     },
     token: `https://${YOUVERSION_API_HOST}/auth/token`,
     // YouVersion has no userinfo endpoint — identity is carried in the ID
@@ -134,6 +138,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.id = user.id;
       session.user.language = user.language ?? null;
       session.user.bibleVersionId = user.bibleVersionId ?? null;
+      session.user.highlightsConsent = user.highlightsConsent ?? null;
       return session;
     },
   },
@@ -143,6 +148,7 @@ declare module "next-auth" {
   interface User {
     language?: string | null;
     bibleVersionId?: number | null;
+    highlightsConsent?: string | null;
   }
   interface Session {
     user: {
@@ -152,6 +158,8 @@ declare module "next-auth" {
       image?: string | null;
       language: string | null;
       bibleVersionId: number | null;
+      /** Step 7 consent state: "granted" | "declined" | "revoked" | null. */
+      highlightsConsent: string | null;
     };
   }
 }

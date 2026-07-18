@@ -74,10 +74,63 @@ export const users = pgTable("users", {
   topicsOther: text("topics_other"),
   /** CIRCLE_HOPE_OPTIONS values — circle matching only, never PlanBuilder. */
   circleHopes: text("circle_hopes").array(),
+  // Highlight-import consent (Step 7). Null = never asked (the consent screen
+  // is shown once, right after OAuth); "granted" / "declined" / "revoked"
+  // record the explicit answer. Import runs only on "granted" — the brief's
+  // opt-in constraint lives in this column.
+  highlightsConsent: text("highlights_consent"),
+  highlightsConsentAt: timestamp("highlights_consent_at", {
+    withTimezone: true,
+  }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
+
+// --- Imported YouVersion highlights (Step 7) ------------------------------
+//
+// One row per imported highlight verse, linked to the user, written only
+// after explicit consent on the post-OAuth consent screen. The Highlights
+// API returns only (version_id, passage_id, color) per verse — the snippet
+// and human-readable label are fetched from the Passages API at import time
+// (YouVersion stays the only source of Bible text), and the API exposes no
+// creation date, so importedAt records when Round imported it. Never joined
+// into any circle-facing view: highlights are private to their owner unless
+// explicitly shared per-item by the user (brief §8.8 — sharing is a later
+// step; nothing here exposes them).
+export const highlights = pgTable(
+  "highlights",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** USFM passage reference the highlight covers, e.g. "PSA.23.1". */
+    reference: text("reference").notNull(),
+    /** Human-readable reference from the Passages API, e.g. "Psalm 23:1". */
+    label: text("label"),
+    /** Numeric YouVersion version ID the highlight was made in. */
+    versionId: integer("version_id").notNull(),
+    /** Version abbreviation at import time, e.g. "NIV" — for display. */
+    versionAbbreviation: text("version_abbreviation"),
+    /** Short passage-text snippet (truncated), null if the fetch failed. */
+    snippet: text("snippet"),
+    /** Highlight colour as returned by the API (hex without #). */
+    color: text("color"),
+    importedAt: timestamp("imported_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // Re-running an import can never duplicate a highlight.
+    uniqueIndex("highlights_user_version_reference_idx").on(
+      table.userId,
+      table.versionId,
+      table.reference,
+    ),
+    index("highlights_user_idx").on(table.userId),
+  ],
+);
 
 export const accounts = pgTable(
   "accounts",

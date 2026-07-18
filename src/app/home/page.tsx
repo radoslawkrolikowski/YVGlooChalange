@@ -15,8 +15,11 @@ export default async function HomePage() {
   const session = await auth();
 
   if (session?.user) {
-    // Path A completes onboarding before Home: language drives every passage
-    // fetch and translation target (Step 9).
+    // Path A's post-OAuth order follows the brief: highlight-import consent
+    // (Step 7) is asked once, before onboarding; then onboarding completes
+    // before Home, since language drives every passage fetch and translation
+    // target (Step 9).
+    if (session.user.highlightsConsent === null) redirect("/consent");
     if (session.user.language === null) redirect("/onboarding");
     const displayName = session.user.name ?? "YouVersion reader";
     const planState = await loadUserPlanState(session.user.id);
