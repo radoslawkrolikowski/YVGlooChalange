@@ -1,7 +1,7 @@
 import { HeaderMenu } from "@/components/layout/header-menu";
 import { AppShell } from "@/components/layout/app-shell";
 import { auth } from "@/lib/auth";
-import { loadUserPlanState } from "@/lib/plans";
+import { listPausedPlans, loadUserPlanState } from "@/lib/plans";
 import { AnonPlanTab } from "./anon-plan-tab";
 import { PlanEmptyState, PlanScreen } from "./plan-screen";
 
@@ -14,7 +14,10 @@ export default async function PlanPage() {
   const session = await auth();
 
   if (session?.user) {
-    const state = await loadUserPlanState(session.user.id);
+    const [state, pausedPlans] = await Promise.all([
+      loadUserPlanState(session.user.id),
+      listPausedPlans(session.user.id),
+    ]);
     return (
       <AppShell
         headerAction={
@@ -24,7 +27,11 @@ export default async function PlanPage() {
           />
         }
       >
-        {state ? <PlanScreen state={state} /> : <PlanEmptyState />}
+        {state ? (
+          <PlanScreen state={state} pausedPlans={pausedPlans} />
+        ) : (
+          <PlanEmptyState pausedPlans={pausedPlans} />
+        )}
       </AppShell>
     );
   }

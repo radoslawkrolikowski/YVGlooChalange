@@ -57,6 +57,13 @@
       "when": 1784321623119,
       "tag": "0007_seed-predefined-plans",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784395134729,
+      "tag": "0008_step-12a-plan-history",
+      "breakpoints": true
     }
   ]
 }
