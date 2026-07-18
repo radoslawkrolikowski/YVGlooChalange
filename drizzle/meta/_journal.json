@@ -71,6 +71,13 @@
       "when": 1784396170035,
       "tag": "0009_left_magdalene",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784399460544,
+      "tag": "0010_step-7a-snippet-version",
+      "breakpoints": true
     }
   ]
 }

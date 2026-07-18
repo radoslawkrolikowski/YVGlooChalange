@@ -1,0 +1,1 @@
+ALTER TABLE "highlights" ADD COLUMN "snippet_version_id" integer;

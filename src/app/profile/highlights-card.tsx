@@ -8,6 +8,7 @@ import {
   Card,
   Divider,
   SectionLabel,
+  VersionAttribution,
 } from "@/components/ui";
 import type { HighlightSummary } from "@/lib/highlights";
 
@@ -88,7 +89,12 @@ export function HighlightsCard({
                     <span>{entry.versionAbbreviation}</span>
                   )}
                   <span>
-                    {new Date(entry.importedAt).toLocaleDateString()}
+                    {new Date(entry.importedAt).toLocaleDateString("en-GB", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                      timeZone: "UTC",
+                    })}
                   </span>
                 </span>
               </div>
@@ -97,6 +103,11 @@ export function HighlightsCard({
                   &ldquo;{entry.snippet}&rdquo;
                 </p>
               )}
+              {entry.attribution &&
+                summary.sample[index + 1]?.snippetVersionId !==
+                  entry.snippetVersionId && (
+                  <VersionAttribution text={entry.attribution} />
+                )}
             </li>
           ))}
         </ul>
