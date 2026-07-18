@@ -17,7 +17,6 @@
 import {
   ApiClient,
   BibleClient,
-  HighlightsClient,
   type BibleVersion as SdkBibleVersion,
 } from "@youversion/platform-core";
 
@@ -128,33 +127,21 @@ export function toLanguageRange(language: string): string {
   return tag;
 }
 
-let cachedApiClient: ApiClient | null = null;
-let cachedBibleClient: BibleClient | null = null;
-let cachedHighlightsClient: HighlightsClient | null = null;
-
-function apiClient(): ApiClient {
-  if (!cachedApiClient) {
-    const appKey = process.env.YOUVERSION_API_KEY;
-    if (!appKey) {
-      throw new Error("YOUVERSION_API_KEY is not set — see .env.example");
-    }
-    cachedApiClient = new ApiClient({ appKey });
+function appKey(): string {
+  const key = process.env.YOUVERSION_API_KEY;
+  if (!key) {
+    throw new Error("YOUVERSION_API_KEY is not set — see .env.example");
   }
-  return cachedApiClient;
+  return key;
 }
+
+let cachedBibleClient: BibleClient | null = null;
 
 function bibleClient(): BibleClient {
   if (!cachedBibleClient) {
-    cachedBibleClient = new BibleClient(apiClient());
+    cachedBibleClient = new BibleClient(new ApiClient({ appKey: appKey() }));
   }
   return cachedBibleClient;
-}
-
-function highlightsClient(): HighlightsClient {
-  if (!cachedHighlightsClient) {
-    cachedHighlightsClient = new HighlightsClient(apiClient());
-  }
-  return cachedHighlightsClient;
 }
 
 // The SDK throws plain Errors with a numeric `status` property attached for
@@ -260,22 +247,52 @@ export async function validatePassageReference(
 }
 
 /**
- * Fetch the signed-in user's existing highlights — the User Highlights API
- * behind Step 7's opt-in import. Requires the user's OAuth access token
- * (`highlights` scope); the app key alone cannot read user data. Returns one
- * entry per highlighted verse (the API returns a colour per verse, without
- * ranges).
+ * Fetch the signed-in user's highlights within one chapter of one version —
+ * the User Highlights API behind Step 7's opt-in import. The gateway only
+ * answers single-chapter queries (`bible_id` + chapter `passage_id`); there
+ * is no "all my highlights" call, so import is a scan of curated chapters
+ * plus per-chapter sync as the user reads. Called directly (not through the
+ * SDK's HighlightsClient, which sends the token as a `lat` query parameter
+ * and names the field `version_id` — the live gateway requires an
+ * `Authorization: Bearer` header and returns `bible_id`). Requires the
+ * user's OAuth access token with the `highlights` permission (granted via
+ * `requested_permissions` at sign-in); the app key alone cannot read user
+ * data. Returns one entry per highlighted verse.
  */
-export async function fetchUserHighlights(
+export async function fetchChapterHighlights(
   accessToken: string,
+  versionId: number,
+  chapterUsfm: string,
 ): Promise<UserHighlight[]> {
-  const endpoint = "user highlights";
-  const collection = await callSdk(endpoint, () =>
-    highlightsClient().getHighlights(undefined, accessToken),
-  );
-  return collection.data.map((h) => ({
+  const endpoint = `highlights in ${chapterUsfm} version ${versionId}`;
+  const url = new URL("https://api.youversion.com/v1/highlights");
+  url.searchParams.set("bible_id", String(versionId));
+  url.searchParams.set("passage_id", chapterUsfm);
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "x-yvp-app-key": appKey(),
+    },
+    cache: "no-store",
+  });
+
+  if (response.status === 204) return [];
+  if (!response.ok) {
+    throw new YouVersionApiError(
+      `YouVersion ${endpoint} failed (${response.status})`,
+      response.status,
+      endpoint,
+      await response.text().catch(() => undefined),
+    );
+  }
+
+  const body = (await response.json()) as {
+    data?: { bible_id: number; passage_id: string; color: string }[];
+  };
+  return (body.data ?? []).map((h) => ({
     reference: h.passage_id,
-    versionId: h.version_id,
+    versionId: h.bible_id,
     color: h.color,
   }));
 }

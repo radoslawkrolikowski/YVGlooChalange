@@ -111,7 +111,7 @@ export function ConsentScreen() {
       {phase.name === "importing" && (
         <Card className="flex flex-col gap-3" aria-live="polite">
           <p className="text-sm font-medium text-ink">
-            Importing your highlights…
+            Importing your highlights… this can take a few moments.
           </p>
           <Skeleton variant="text" className="w-3/4" />
           <Skeleton variant="text" className="w-2/3" />
