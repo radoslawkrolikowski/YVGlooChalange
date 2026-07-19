@@ -15,4 +15,5 @@ export { ProgressSteps } from "./progress-steps";
 export { SelectionCard } from "./selection-card";
 export { ChoiceChips, MultiChoiceChips } from "./choice-chips";
 export { AgentThinking } from "./agent-thinking";
+export { BottomSheet } from "./bottom-sheet";
 export { VersionAttribution } from "./version-attribution";

@@ -1,13 +1,7 @@
 import { BookOpen, CalendarDays } from "lucide-react";
 import Link from "next/link";
 import { PlanDayList } from "@/components/plan/plan-day-list";
-import {
-  Button,
-  ButtonLink,
-  Card,
-  EmptyState,
-  SectionLabel,
-} from "@/components/ui";
+import { ButtonLink, Card, EmptyState, SectionLabel } from "@/components/ui";
 import type { PausedPlanSummary, PlanState } from "@/lib/plans";
 import { PausedPlans } from "./paused-plans";
 
@@ -43,11 +37,10 @@ export function PlanScreen({
         <p className="text-sm text-ink-soft">
           Read today&rsquo;s passage at your own pace.
         </p>
-        {/* Disabled until Step 13 builds the passage view this opens. */}
-        <Button full disabled className="mt-1">
+        <ButtonLink href="/read" full className="mt-1">
           <BookOpen size={18} aria-hidden />
           Continue reading
-        </Button>
+        </ButtonLink>
       </Card>
 
       <Card className="flex flex-col gap-4">
