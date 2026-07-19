@@ -22,6 +22,10 @@ export interface AnonHighlight {
   versionAbbreviation: string | null;
   /** The selected text, exactly as rendered from YouVersion. */
   text: string;
+  /** Copyright attribution of the version on display when selected —
+   * captured at creation so the profile card can show it (the constraint:
+   * Bible text is never displayed without its attribution). */
+  attribution: string | null;
   createdAt: string;
 }
 

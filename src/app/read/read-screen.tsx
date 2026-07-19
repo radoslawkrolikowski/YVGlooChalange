@@ -169,7 +169,11 @@ export function ReadScreen({
       text,
     };
     if (isAnonymous) {
-      saveAnonHighlight({ ...entry, createdAt: new Date().toISOString() });
+      saveAnonHighlight({
+        ...entry,
+        attribution: result.attribution,
+        createdAt: new Date().toISOString(),
+      });
       return;
     }
     fetch("/api/highlights/session", {

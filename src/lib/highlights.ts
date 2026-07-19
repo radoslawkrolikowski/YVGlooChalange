@@ -489,3 +489,48 @@ export async function listSessionHighlights(
     createdAt: row.importedAt.toISOString(),
   }));
 }
+
+/** A "Highlighted in Round" profile entry — a SessionHighlight plus the
+ * attribution of the version its text was captured from. */
+export interface SessionHighlightListEntry extends SessionHighlight {
+  attribution: string | null;
+}
+
+/**
+ * Every in-app highlight the user has made, newest first, with copyright
+ * attributions resolved — the profile's "Highlighted in Round" section.
+ * Owner's eyes only, like everything else in this table.
+ */
+export async function loadSessionHighlightList(
+  userId: string,
+): Promise<SessionHighlightListEntry[]> {
+  const rows = await db
+    .select({
+      id: highlights.id,
+      reference: highlights.reference,
+      label: highlights.label,
+      versionId: highlights.versionId,
+      versionAbbreviation: highlights.versionAbbreviation,
+      snippet: highlights.snippet,
+      importedAt: highlights.importedAt,
+    })
+    .from(highlights)
+    .where(
+      and(eq(highlights.userId, userId), eq(highlights.source, "in_app")),
+    )
+    .orderBy(desc(highlights.importedAt), desc(highlights.id));
+
+  const attributions = await resolveVersionAttributions(
+    [...new Set(rows.map((row) => row.versionId))],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    reference: row.reference,
+    label: row.label,
+    versionId: row.versionId,
+    versionAbbreviation: row.versionAbbreviation,
+    text: row.snippet ?? "",
+    attribution: attributions.get(row.versionId) ?? null,
+    createdAt: row.importedAt.toISOString(),
+  }));
+}

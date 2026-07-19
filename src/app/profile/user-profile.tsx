@@ -13,10 +13,14 @@ import {
   SectionLabel,
 } from "@/components/ui";
 import type { ProfileAnswers } from "@/config/profile";
-import type { HighlightSummary } from "@/lib/highlights";
+import type {
+  HighlightSummary,
+  SessionHighlightListEntry,
+} from "@/lib/highlights";
 import { AboutYouCard } from "./about-you-card";
 import { HighlightsCard } from "./highlights-card";
 import { ReadingSettingsCard } from "./reading-settings-card";
+import { SessionHighlightsCard } from "./session-highlights-card";
 
 /*
  * Signed-in profile (Step 6, recomposed in Step 8C): identity header,
@@ -32,6 +36,7 @@ export function UserProfile({
   profileAnswers,
   highlightSummary,
   highlightsConsent,
+  sessionHighlights,
 }: {
   displayName: string;
   language: string | null;
@@ -39,6 +44,7 @@ export function UserProfile({
   profileAnswers: ProfileAnswers;
   highlightSummary: HighlightSummary;
   highlightsConsent: string | null;
+  sessionHighlights: SessionHighlightListEntry[];
 }) {
   const [signingOut, setSigningOut] = useState(false);
 
@@ -73,6 +79,18 @@ export function UserProfile({
         />
 
         <AboutYouCard answers={profileAnswers} isDefaults={false} />
+
+        <SessionHighlightsCard
+          entries={sessionHighlights.map((entry) => ({
+            key: entry.id,
+            label: entry.label ?? entry.reference,
+            versionId: entry.versionId,
+            versionAbbreviation: entry.versionAbbreviation,
+            text: entry.text,
+            attribution: entry.attribution,
+            createdAt: entry.createdAt,
+          }))}
+        />
 
         <HighlightsCard
           initialSummary={highlightSummary}
