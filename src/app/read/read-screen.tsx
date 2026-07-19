@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, ExternalLink } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, ExternalLink } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ANON_TOKEN_STORAGE_KEY } from "@/app/instant-access-button";
 import {
@@ -83,6 +83,7 @@ export function ReadScreen({
   preferredVersionId,
   isAnonymous,
   dayCompleted,
+  isLastDay,
 }: {
   day: PlanDay;
   language: string | null;
@@ -92,6 +93,8 @@ export function ReadScreen({
   isAnonymous: boolean;
   /** Whether this day is already marked complete (Step 14). */
   dayCompleted: boolean;
+  /** Last day of the plan — no "Continue to Day n+1" after completing it. */
+  isLastDay: boolean;
 }) {
   const [result, setResult] = useState<PassageResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -312,22 +315,39 @@ export function ReadScreen({
 
             {/* "Finished reading" — private progress, no streak language. */}
             {completed ? (
-              <div className="flex items-center gap-3 rounded-lg bg-success-soft px-4 py-3.5">
-                <span
-                  aria-hidden
-                  className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-success text-ivory"
-                >
-                  <Check size={16} strokeWidth={3} />
-                </span>
-                <div className="min-w-0">
-                  <p className="font-semibold text-success">
-                    Day {day.dayNumber} complete
-                  </p>
-                  <p className="text-sm text-ink-soft">
-                    Well done — take today&rsquo;s words with you.
-                  </p>
+              <>
+                <div className="flex items-center gap-3 rounded-lg bg-success-soft px-4 py-3.5">
+                  <span
+                    aria-hidden
+                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-success text-ivory"
+                  >
+                    <Check size={16} strokeWidth={3} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-success">
+                      Day {day.dayNumber} complete
+                    </p>
+                    <p className="text-sm text-ink-soft">
+                      Well done — take today&rsquo;s words with you.
+                    </p>
+                  </div>
                 </div>
-              </div>
+                {!isLastDay && (
+                  <Button
+                    full
+                    // Full navigation, not client routing: /read always
+                    // resolves "today" fresh — Path A re-reads the active
+                    // progress row, Path B re-reads the re-minted token.
+                    onClick={() => window.location.assign("/read")}
+                  >
+                    Continue to Day {day.dayNumber + 1}
+                    <ArrowRight size={18} aria-hidden />
+                  </Button>
+                )}
+                <ButtonLink href="/plan" variant="secondary" full>
+                  Back to plan
+                </ButtonLink>
+              </>
             ) : (
               <>
                 <Button full onClick={finishReading} disabled={finishing}>

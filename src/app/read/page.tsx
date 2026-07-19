@@ -33,6 +33,7 @@ export default async function ReadPage() {
             preferredVersionId={session.user.bibleVersionId}
             isAnonymous={false}
             dayCompleted={state.completedDays.includes(state.today.dayNumber)}
+            isLastDay={state.today.dayNumber >= state.plan.lengthDays}
           />
         ) : (
           <ReadEmptyState />
