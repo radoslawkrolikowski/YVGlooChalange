@@ -62,10 +62,8 @@ export function TodayCard({ reading = null }: { reading?: TodayReading | null })
           </>
         )}
 
-        {/* Step 13 repoints this at the passage view; until then the plan
-            screen is the reading destination. */}
         {reading ? (
-          <ButtonLink href="/plan" full className="mt-1">
+          <ButtonLink href="/read" full className="mt-1">
             <BookOpen size={18} aria-hidden />
             Start reading
           </ButtonLink>

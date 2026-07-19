@@ -4,17 +4,19 @@
 // it came from must be displayed with it (plan: global attribution
 // constraint). This module resolves that attribution text for a set of
 // version IDs, in order of preference:
-//   1. the cached live catalogue (bible_versions table — has the API's
-//      copyright text),
-//   2. a live fetchVersion call for IDs the per-language cache doesn't hold
-//      (highlights can be made in any version, not just the app's curated
-//      languages) — not written back into the cache, whose rows are pruned
-//      per-language on refresh,
-//   3. the curated SUPPORTED_VERSIONS title as a last resort.
-// Versions without copyright text from the API (e.g. public domain) fall
-// back to the version title, so an attribution line is always available.
+//   1. the cached live catalogue (bible_versions table) — but only rows that
+//      actually carry copyright text: the versions LIST endpoint the cache is
+//      built from omits copyright for some versions (e.g. BSB) that the
+//      single-version endpoint does report, so a null cached copyright means
+//      "unknown", never "none",
+//   2. a live fetchVersion call (the single-version endpoint, which has the
+//      authoritative copyright field) — the result is written back into the
+//      cache row when one exists, so each version costs at most one live
+//      call per catalogue refresh cycle,
+//   3. the version title (API's, else curated SUPPORTED_VERSIONS) as a last
+//      resort, so an attribution line is always available.
 
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { findSupportedVersion } from "@/config/bible-versions";
 import { db } from "@/db";
 import { bibleVersions } from "@/db/schema";
@@ -31,6 +33,9 @@ export async function resolveVersionAttributions(
   const distinct = [...new Set(versionIds)];
   if (distinct.length === 0) return attributions;
 
+  // Cached titles for IDs whose cache row has no copyright text — kept as a
+  // fallback in case the live lookup below fails too.
+  const cachedTitles = new Map<number, string>();
   try {
     const rows = await db
       .select({
@@ -41,7 +46,8 @@ export async function resolveVersionAttributions(
       .from(bibleVersions)
       .where(inArray(bibleVersions.id, distinct));
     for (const row of rows) {
-      attributions.set(row.id, row.copyright ?? row.title);
+      if (row.copyright) attributions.set(row.id, row.copyright);
+      else cachedTitles.set(row.id, row.title);
     }
   } catch {
     // Cache unavailable — the live and curated fallbacks below still run.
@@ -54,9 +60,22 @@ export async function resolveVersionAttributions(
         try {
           const version = await fetchVersion(id);
           attributions.set(id, version.copyright ?? version.title);
+          if (version.copyright && cachedTitles.has(id)) {
+            // Fill the cache row's missing copyright so the next render is a
+            // cache hit (until the daily catalogue refresh nulls it again).
+            try {
+              await db
+                .update(bibleVersions)
+                .set({ copyright: version.copyright })
+                .where(eq(bibleVersions.id, id));
+            } catch {
+              // Cache write is best-effort; the attribution is already set.
+            }
+          }
         } catch {
-          const supported = findSupportedVersion(id);
-          if (supported) attributions.set(id, supported.title);
+          const fallback =
+            cachedTitles.get(id) ?? findSupportedVersion(id)?.title;
+          if (fallback) attributions.set(id, fallback);
         }
       }),
   );
