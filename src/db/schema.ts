@@ -87,17 +87,27 @@ export const users = pgTable("users", {
     .defaultNow(),
 });
 
-// --- Imported YouVersion highlights (Step 7) ------------------------------
+// --- Highlights (Steps 7 and 14) ------------------------------------------
 //
-// One row per imported highlight verse, linked to the user, written only
-// after explicit consent on the post-OAuth consent screen. The Highlights
-// API returns only (version_id, passage_id, color) per verse — the snippet
-// and human-readable label are fetched from the Passages API at import time
-// (YouVersion stays the only source of Bible text), and the API exposes no
-// creation date, so importedAt records when Round imported it. Never joined
-// into any circle-facing view: highlights are private to their owner unless
-// explicitly shared per-item by the user (brief §8.8 — sharing is a later
-// step; nothing here exposes them).
+// Two sources share this table, distinguished by `source`:
+//
+// "imported" (Step 7): one row per imported YouVersion highlight verse,
+// written only after explicit consent on the post-OAuth consent screen. The
+// Highlights API returns only (version_id, passage_id, color) per verse —
+// the snippet and human-readable label are fetched from the Passages API at
+// import time (YouVersion stays the only source of Bible text), and the API
+// exposes no creation date, so importedAt records when Round imported it.
+//
+// "in_app" (Step 14): a phrase the user selected while reading in Round —
+// `snippet` holds the selected text exactly as rendered, `versionId` is the
+// version the passage was displayed in when the selection was made (the
+// brief's "stored with the version they were made in"), and `reference` is
+// the plan day's passage reference. Path A only — anonymous sessions keep
+// in-app highlights in browser sessionStorage, never in this table.
+//
+// Never joined into any circle-facing view: highlights are private to their
+// owner unless explicitly shared per-item by the user (brief §8.8 — sharing
+// is a later step; nothing here exposes them).
 export const highlights = pgTable(
   "highlights",
   {
@@ -123,17 +133,19 @@ export const highlights = pgTable(
     snippetVersionId: integer("snippet_version_id"),
     /** Highlight colour as returned by the API (hex without #). */
     color: text("color"),
+    /** "imported" (Step 7 YouVersion import) or "in_app" (Step 14). */
+    source: text("source").notNull().default("imported"),
     importedAt: timestamp("imported_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (table) => [
-    // Re-running an import can never duplicate a highlight.
-    uniqueIndex("highlights_user_version_reference_idx").on(
-      table.userId,
-      table.versionId,
-      table.reference,
-    ),
+    // Re-running an import can never duplicate a highlight. Partial: in-app
+    // highlights may legitimately repeat a (version, reference) pair — a
+    // reader can mark several phrases in the same passage.
+    uniqueIndex("highlights_user_version_reference_idx")
+      .on(table.userId, table.versionId, table.reference)
+      .where(sql`${table.source} = 'imported'`),
     index("highlights_user_idx").on(table.userId),
   ],
 );

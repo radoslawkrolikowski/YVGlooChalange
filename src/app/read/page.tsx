@@ -31,6 +31,9 @@ export default async function ReadPage() {
             day={state.today}
             language={session.user.language}
             preferredVersionId={session.user.bibleVersionId}
+            isAnonymous={false}
+            dayCompleted={state.completedDays.includes(state.today.dayNumber)}
+            isLastDay={state.today.dayNumber >= state.plan.lengthDays}
           />
         ) : (
           <ReadEmptyState />

@@ -13,7 +13,7 @@
 //   2. Sync-on-read: every chapter the user opens in the app is synced via
 //      syncChapterHighlights (wired into the passage view in Step 13).
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import {
   DEFAULT_VERSION_BY_LANGUAGE,
   findSupportedVersion,
@@ -341,7 +341,11 @@ export async function loadHighlightSummary(
       importedAt: highlights.importedAt,
     })
     .from(highlights)
-    .where(eq(highlights.userId, userId))
+    // The profile card shows YouVersion imports only — Step 14's in-app
+    // highlights share the table but not this surface.
+    .where(
+      and(eq(highlights.userId, userId), eq(highlights.source, "imported")),
+    )
     .orderBy(desc(highlights.importedAt), desc(highlights.id));
 
   // Attribution follows the snippet's actual source version; pre-7A rows
@@ -376,8 +380,157 @@ export async function loadHighlightSummary(
   };
 }
 
-/** Revoke: delete every imported highlight and record the revocation. */
+/** Revoke: delete every imported highlight and record the revocation.
+ * In-app highlights (Step 14) are untouched — consent covers the import. */
 export async function revokeHighlights(userId: string): Promise<void> {
-  await db.delete(highlights).where(eq(highlights.userId, userId));
+  await db
+    .delete(highlights)
+    .where(
+      and(eq(highlights.userId, userId), eq(highlights.source, "imported")),
+    );
   await recordHighlightsConsent(userId, "revoked");
+}
+
+// --- In-app session highlights (Step 14) ----------------------------------
+
+export { MAX_SESSION_HIGHLIGHT_LENGTH } from "@/lib/anon-highlights";
+import { MAX_SESSION_HIGHLIGHT_LENGTH } from "@/lib/anon-highlights";
+
+/** One phrase highlighted while reading in Round — owner's eyes only. */
+export interface SessionHighlight {
+  id: number;
+  /** USFM reference of the passage it was made in, e.g. "PSA.23". */
+  reference: string;
+  /** Human-readable passage reference, e.g. "Salmos 23". */
+  label: string | null;
+  /** Version ID the passage was DISPLAYED in when selected (per the brief). */
+  versionId: number;
+  versionAbbreviation: string | null;
+  /** The selected text, exactly as rendered from YouVersion. */
+  text: string;
+  createdAt: string;
+}
+
+/**
+ * Stores one in-app highlight (Path A). The selected text lands in `snippet`
+ * with `snippetVersionId = versionId`: unlike imports, the text was captured
+ * from the version actually on screen, so the two can never differ.
+ */
+export async function createSessionHighlight(
+  userId: string,
+  input: {
+    reference: string;
+    label: string | null;
+    versionId: number;
+    versionAbbreviation: string | null;
+    text: string;
+  },
+): Promise<SessionHighlight> {
+  const text = input.text.trim().slice(0, MAX_SESSION_HIGHLIGHT_LENGTH);
+  const [row] = await db
+    .insert(highlights)
+    .values({
+      userId,
+      reference: input.reference,
+      label: input.label,
+      versionId: input.versionId,
+      versionAbbreviation: input.versionAbbreviation,
+      snippet: text,
+      snippetVersionId: input.versionId,
+      source: "in_app",
+    })
+    .returning({ id: highlights.id, importedAt: highlights.importedAt });
+  return {
+    id: row.id,
+    reference: input.reference,
+    label: input.label,
+    versionId: input.versionId,
+    versionAbbreviation: input.versionAbbreviation,
+    text,
+    createdAt: row.importedAt.toISOString(),
+  };
+}
+
+/**
+ * The user's in-app highlights for one passage reference, across all
+ * versions (the reading screen filters to the version on display). Private
+ * to the owner; never joined into any circle-facing view.
+ */
+export async function listSessionHighlights(
+  userId: string,
+  reference: string,
+): Promise<SessionHighlight[]> {
+  const rows = await db
+    .select({
+      id: highlights.id,
+      reference: highlights.reference,
+      label: highlights.label,
+      versionId: highlights.versionId,
+      versionAbbreviation: highlights.versionAbbreviation,
+      snippet: highlights.snippet,
+      importedAt: highlights.importedAt,
+    })
+    .from(highlights)
+    .where(
+      and(
+        eq(highlights.userId, userId),
+        eq(highlights.source, "in_app"),
+        eq(highlights.reference, reference),
+      ),
+    )
+    .orderBy(asc(highlights.importedAt), asc(highlights.id));
+  return rows.map((row) => ({
+    id: row.id,
+    reference: row.reference,
+    label: row.label,
+    versionId: row.versionId,
+    versionAbbreviation: row.versionAbbreviation,
+    text: row.snippet ?? "",
+    createdAt: row.importedAt.toISOString(),
+  }));
+}
+
+/** A "Highlighted in Round" profile entry — a SessionHighlight plus the
+ * attribution of the version its text was captured from. */
+export interface SessionHighlightListEntry extends SessionHighlight {
+  attribution: string | null;
+}
+
+/**
+ * Every in-app highlight the user has made, newest first, with copyright
+ * attributions resolved — the profile's "Highlighted in Round" section.
+ * Owner's eyes only, like everything else in this table.
+ */
+export async function loadSessionHighlightList(
+  userId: string,
+): Promise<SessionHighlightListEntry[]> {
+  const rows = await db
+    .select({
+      id: highlights.id,
+      reference: highlights.reference,
+      label: highlights.label,
+      versionId: highlights.versionId,
+      versionAbbreviation: highlights.versionAbbreviation,
+      snippet: highlights.snippet,
+      importedAt: highlights.importedAt,
+    })
+    .from(highlights)
+    .where(
+      and(eq(highlights.userId, userId), eq(highlights.source, "in_app")),
+    )
+    .orderBy(desc(highlights.importedAt), desc(highlights.id));
+
+  const attributions = await resolveVersionAttributions(
+    [...new Set(rows.map((row) => row.versionId))],
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    reference: row.reference,
+    label: row.label,
+    versionId: row.versionId,
+    versionAbbreviation: row.versionAbbreviation,
+    text: row.snippet ?? "",
+    attribution: attributions.get(row.versionId) ?? null,
+    createdAt: row.importedAt.toISOString(),
+  }));
 }

@@ -128,6 +128,27 @@ export function remintAnonPlan(
   return { token: signSession(session), session };
 }
 
+/**
+ * Re-mints an existing anonymous session with one plan day marked complete
+ * (Step 14 "Finished reading") — same replacement-token mechanism, same
+ * carried-over identity. Idempotent: completing an already-completed day
+ * changes nothing. Returns null when the session has no plan to complete.
+ */
+export function remintAnonDayComplete(
+  current: AnonSession,
+  dayNumber: number,
+): { token: string; session: AnonSession } | null {
+  if (!current.plan) return null;
+  const completedDays = current.plan.completedDays.includes(dayNumber)
+    ? current.plan.completedDays
+    : [...current.plan.completedDays, dayNumber].sort((a, b) => a - b);
+  const session: AnonSession = {
+    ...current,
+    plan: { ...current.plan, completedDays },
+  };
+  return { token: signSession(session), session };
+}
+
 export function remintAnonProfile(
   current: AnonSession,
   profile: ProfileAnswers,

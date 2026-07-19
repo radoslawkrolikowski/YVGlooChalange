@@ -36,6 +36,9 @@
   --color-charcoal: #2d2a25;
   --color-gold: #b8935a;
   --color-gold-soft: #ecdfc8;
+  /* Reading-highlight wash (Step 14) — the editorial palette's counterpart
+     to the plan's original "light teal token" (teal was retired in 8B). */
+  --color-highlight: #f0e3bf;
 
   /* Semantic */
   --color-success: #16744a;

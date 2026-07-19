@@ -15,11 +15,13 @@ import {
   SectionLabel,
 } from "@/components/ui";
 import { PROFILE_DEFAULTS } from "@/config/profile";
+import { loadAnonHighlights } from "@/lib/anon-highlights";
 import { clearAnonSession, useAnonSession } from "@/lib/use-anon-session";
 import { HomeSkeleton } from "../home/home-skeleton";
 import { UpgradeBanner } from "../home/upgrade-banner";
 import { AboutYouCard } from "./about-you-card";
 import { ReadingSettingsCard } from "./reading-settings-card";
+import { SessionHighlightsCard } from "./session-highlights-card";
 
 /*
  * Anonymous profile (Steps 8/8A, recomposed in Step 8C): identity header,
@@ -73,6 +75,22 @@ export function AnonProfile() {
         <AboutYouCard
           answers={session.profile ?? PROFILE_DEFAULTS}
           isDefaults={!session.profile}
+        />
+
+        {/* In-app highlights (Step 14) — this session only, newest first;
+            gone when the session ends, like everything anonymous. */}
+        <SessionHighlightsCard
+          entries={loadAnonHighlights()
+            .map((entry, index) => ({
+              key: index,
+              label: entry.label ?? entry.reference,
+              versionId: entry.versionId,
+              versionAbbreviation: entry.versionAbbreviation,
+              text: entry.text,
+              attribution: entry.attribution ?? null,
+              createdAt: entry.createdAt,
+            }))
+            .reverse()}
         />
 
         <Card className="flex flex-col gap-3">

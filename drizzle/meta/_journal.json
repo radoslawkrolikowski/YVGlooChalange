@@ -78,6 +78,13 @@
       "when": 1784399460544,
       "tag": "0010_step-7a-snippet-version",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784457668354,
+      "tag": "0011_step-14-in-app-highlights",
+      "breakpoints": true
     }
   ]
 }
