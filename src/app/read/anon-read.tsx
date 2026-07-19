@@ -61,6 +61,8 @@ export function AnonRead() {
           day={state.today}
           language={session.language}
           preferredVersionId={session.bibleVersionId}
+          isAnonymous
+          dayCompleted={state.completedDays.includes(state.today.dayNumber)}
         />
       ) : (
         <ReadEmptyState />

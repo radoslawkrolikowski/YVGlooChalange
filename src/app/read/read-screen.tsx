@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ExternalLink } from "lucide-react";
+import { Check, ChevronDown, ExternalLink } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ANON_TOKEN_STORAGE_KEY } from "@/app/instant-access-button";
 import {
@@ -12,7 +12,13 @@ import {
   SkeletonText,
   VersionAttribution,
 } from "@/components/ui";
+import {
+  loadAnonHighlights,
+  MAX_SESSION_HIGHLIGHT_LENGTH,
+  saveAnonHighlight,
+} from "@/lib/anon-highlights";
 import type { PlanDay } from "@/lib/plans";
+import { HighlightablePassage } from "./highlightable-passage";
 import { VersionSwitcherSheet } from "./version-switcher-sheet";
 
 /*
@@ -65,20 +71,36 @@ function anonHeaders(): Record<string, string> {
   return token ? { "x-round-session": token } : {};
 }
 
+/** One highlight as the reading screen tracks it, either path. */
+interface HighlightEntry {
+  versionId: number;
+  text: string;
+}
+
 export function ReadScreen({
   day,
   language,
   preferredVersionId,
+  isAnonymous,
+  dayCompleted,
 }: {
   day: PlanDay;
   language: string | null;
   /** The session's stored version choice — pre-selects the switcher. */
   preferredVersionId: number | null;
+  /** Path B: highlights stay in sessionStorage, completion re-mints token. */
+  isAnonymous: boolean;
+  /** Whether this day is already marked complete (Step 14). */
+  dayCompleted: boolean;
 }) {
   const [result, setResult] = useState<PassageResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [highlights, setHighlights] = useState<HighlightEntry[]>([]);
+  const [completed, setCompleted] = useState(dayCompleted);
+  const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState(false);
 
   const load = useCallback(
     async (versionId?: number) => {
@@ -105,6 +127,81 @@ export function ReadScreen({
   useEffect(() => {
     load();
   }, [load]);
+
+  // Load this passage's stored highlights, all versions at once — the render
+  // filters to the version on display, so a version switch needs no refetch.
+  useEffect(() => {
+    if (isAnonymous) {
+      setHighlights(
+        loadAnonHighlights().filter((h) => h.reference === day.reference),
+      );
+      return;
+    }
+    fetch(
+      `/api/highlights/session?reference=${encodeURIComponent(day.reference)}`,
+    )
+      .then((response) => response.json())
+      .then((body) => {
+        if (body.ok) setHighlights(body.highlights as HighlightEntry[]);
+      })
+      .catch(() => {
+        // Stored highlights just don't render this visit; reading goes on.
+      });
+  }, [day.reference, isAnonymous]);
+
+  // A new highlight always belongs to the version actually on screen — after
+  // a fallback fetch that is the fallback version, per the brief ("stored
+  // with the version they were made in").
+  function addHighlight(selectedText: string) {
+    if (!result) return;
+    const text = selectedText.trim().slice(0, MAX_SESSION_HIGHLIGHT_LENGTH);
+    const versionId = result.passage.versionId;
+    if (text.length === 0) return;
+    if (highlights.some((h) => h.versionId === versionId && h.text === text)) {
+      return;
+    }
+    setHighlights((previous) => [...previous, { versionId, text }]);
+    const entry = {
+      reference: day.reference,
+      label: result.passage.reference,
+      versionId,
+      versionAbbreviation: result.passage.versionAbbreviation,
+      text,
+    };
+    if (isAnonymous) {
+      saveAnonHighlight({ ...entry, createdAt: new Date().toISOString() });
+      return;
+    }
+    fetch("/api/highlights/session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(entry),
+    }).catch(() => {
+      // Best-effort persistence; the on-screen wash already happened.
+    });
+  }
+
+  async function finishReading() {
+    setFinishing(true);
+    setFinishError(false);
+    try {
+      const response = await fetch("/api/session/plan/complete", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...anonHeaders() },
+        body: JSON.stringify({ dayNumber: day.dayNumber }),
+      });
+      const body = await response.json();
+      if (!body.ok) throw new Error(body.error);
+      if (body.token) {
+        sessionStorage.setItem(ANON_TOKEN_STORAGE_KEY, body.token);
+      }
+      setCompleted(true);
+    } catch {
+      setFinishError(true);
+    } finally {
+      setFinishing(false);
+    }
+  }
 
   async function switchVersion(versionId: number) {
     setSwitcherOpen(false);
@@ -190,21 +287,55 @@ export function ReadScreen({
           </div>
         ) : result ? (
           <>
-            {/* Long-form reading: reading-size type, generous line height. */}
-            <div className="flex flex-col gap-4 text-lg leading-8 text-ink">
-              {result.passage.content
-                .split(/\n+/)
-                .filter((paragraph) => paragraph.trim().length > 0)
-                .map((paragraph, index) => (
-                  <p key={index}>{paragraph}</p>
-                ))}
-            </div>
+            <p className="text-xs text-ink-faint">
+              Select any phrase to save a highlight — only you can see it.
+            </p>
+
+            <HighlightablePassage
+              content={result.passage.content}
+              highlightTexts={highlights
+                .filter((h) => h.versionId === result.passage.versionId)
+                .map((h) => h.text)}
+              onHighlight={addHighlight}
+            />
 
             <hr className="w-12 border-t-2 border-gold" />
 
             {/* Always the attribution of the version actually rendered. */}
             {result.attribution && (
               <VersionAttribution text={result.attribution} />
+            )}
+
+            {/* "Finished reading" — private progress, no streak language. */}
+            {completed ? (
+              <div className="flex items-center gap-3 rounded-lg bg-success-soft px-4 py-3.5">
+                <span
+                  aria-hidden
+                  className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-success text-ivory"
+                >
+                  <Check size={16} strokeWidth={3} />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-semibold text-success">
+                    Day {day.dayNumber} complete
+                  </p>
+                  <p className="text-sm text-ink-soft">
+                    Well done — take today&rsquo;s words with you.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <Button full onClick={finishReading} disabled={finishing}>
+                  <Check size={18} aria-hidden />
+                  {finishing ? "Saving…" : "Finished reading"}
+                </Button>
+                {finishError && (
+                  <Banner tone="error">
+                    Your progress could not be saved. Please try again.
+                  </Banner>
+                )}
+              </>
             )}
 
             <ButtonLink
