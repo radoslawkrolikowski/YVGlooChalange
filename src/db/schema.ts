@@ -527,6 +527,50 @@ export const escalationAudit = pgTable(
   (table) => [index("escalation_audit_ref_idx").on(table.reflectionRef)],
 );
 
+// --- Private per-passage notes (Step 19A) ---------------------------------
+//
+// One free-text note a reader keeps against a passage they are reading —
+// distinct from highlights (a selected phrase) and reflections (circle-facing).
+// Keyed by the plan day's PASSAGE REFERENCE, not the version ID: a note is
+// about the passage, not the exact rendered translation, so switching versions
+// shows the same note. Saved as the user types (debounced autosave); never
+// posted, shared, or fed to any agent — owner's eyes only, never joined into
+// any circle-facing view. `label` is the human-readable passage label captured
+// at write time so the profile "My notes" list renders without a passage fetch.
+//
+// App-managed, NOT the YouVersion Notes API (brief §85 forbids implementing
+// that API): no Scripture text is ever stored here — only the reference the
+// note hangs on. Path A only — anonymous sessions keep notes in browser
+// sessionStorage, never in this table (brief §7, "no database row").
+export const notes = pgTable(
+  "notes",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** USFM passage reference the note hangs on, e.g. "PSA.23" — the key. */
+    reference: text("reference").notNull(),
+    /** Human-readable passage label, e.g. "Psalm 23" — for the My notes list. */
+    label: text("label"),
+    /** The reader's free text. An emptied note is deleted, not stored blank. */
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** Last-edited time — drives the reverse-chronological My notes order. */
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // Exactly one note per reader per passage — the upsert target behind
+    // debounced autosave.
+    uniqueIndex("notes_user_reference_idx").on(table.userId, table.reference),
+    index("notes_user_updated_idx").on(table.userId, table.updatedAt),
+  ],
+);
+
 export const agentLogs = pgTable("agent_logs", {
   id: serial("id").primaryKey(),
   /** Agent that made the call, e.g. "facilitator"; "dev" for dev routes. */

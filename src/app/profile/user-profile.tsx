@@ -17,8 +17,10 @@ import type {
   HighlightSummary,
   SessionHighlightListEntry,
 } from "@/lib/highlights";
+import type { NoteListEntry } from "@/lib/notes";
 import { AboutYouCard } from "./about-you-card";
 import { HighlightsCard } from "./highlights-card";
+import { MyNotesCard } from "./my-notes-card";
 import { ReadingSettingsCard } from "./reading-settings-card";
 import { SessionHighlightsCard } from "./session-highlights-card";
 
@@ -37,6 +39,7 @@ export function UserProfile({
   highlightSummary,
   highlightsConsent,
   sessionHighlights,
+  notes,
 }: {
   displayName: string;
   language: string | null;
@@ -45,6 +48,7 @@ export function UserProfile({
   highlightSummary: HighlightSummary;
   highlightsConsent: string | null;
   sessionHighlights: SessionHighlightListEntry[];
+  notes: NoteListEntry[];
 }) {
   const [signingOut, setSigningOut] = useState(false);
 
@@ -89,6 +93,15 @@ export function UserProfile({
             text: entry.text,
             attribution: entry.attribution,
             createdAt: entry.createdAt,
+          }))}
+        />
+
+        <MyNotesCard
+          entries={notes.map((note) => ({
+            reference: note.reference,
+            label: note.label ?? note.reference,
+            body: note.body,
+            updatedAt: note.updatedAt,
           }))}
         />
 

@@ -25,6 +25,7 @@ import {
 } from "@/lib/anon-highlights";
 import type { PlanDay } from "@/lib/plans";
 import { HighlightablePassage } from "./highlightable-passage";
+import { NoteCard } from "./note-card";
 import { PreReadingCard } from "./pre-reading-card";
 import { VersionSwitcherSheet } from "./version-switcher-sheet";
 
@@ -92,6 +93,7 @@ export function ReadScreen({
   dayCompleted,
   isLastDay,
   circleId,
+  focusNote = false,
 }: {
   day: PlanDay;
   language: string | null;
@@ -105,6 +107,8 @@ export function ReadScreen({
   isLastDay: boolean;
   /** The reader's circle, if any — enables the Step 19 reflection prompt. */
   circleId: string | null;
+  /** Deep-linked from Profile's "My notes" — open the note expanded, focused. */
+  focusNote?: boolean;
 }) {
   const [result, setResult] = useState<PassageResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -330,6 +334,16 @@ export function ReadScreen({
             {result.attribution && (
               <VersionAttribution text={result.attribution} />
             )}
+
+            {/* Private per-passage note (Step 19A) — a quiet scratch surface
+                beside highlights, keyed on the reference so a version switch
+                keeps the same note. Never posted, shared, or fed to an agent. */}
+            <NoteCard
+              reference={day.reference}
+              label={day.label}
+              isAnonymous={isAnonymous}
+              autoFocus={focusNote}
+            />
 
             {/* "Finished reading" — private progress, no streak language. */}
             {completed ? (
