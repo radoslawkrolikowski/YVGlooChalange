@@ -3,6 +3,7 @@ import {
   loadHighlightSummary,
   loadSessionHighlightList,
 } from "@/lib/highlights";
+import { loadNotesList } from "@/lib/notes";
 import { loadUserProfileAnswers } from "@/lib/profile";
 import { AnonProfile } from "./anon-profile";
 import { UserProfile } from "./user-profile";
@@ -25,6 +26,7 @@ export default async function ProfilePage() {
         highlightSummary={await loadHighlightSummary(session.user.id)}
         highlightsConsent={session.user.highlightsConsent}
         sessionHighlights={await loadSessionHighlightList(session.user.id)}
+        notes={await loadNotesList(session.user.id)}
       />
     );
   }

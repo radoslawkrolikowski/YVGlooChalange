@@ -16,10 +16,12 @@ import {
 } from "@/components/ui";
 import { PROFILE_DEFAULTS } from "@/config/profile";
 import { loadAnonHighlights } from "@/lib/anon-highlights";
+import { loadAnonNotes } from "@/lib/anon-notes";
 import { clearAnonSession, useAnonSession } from "@/lib/use-anon-session";
 import { HomeSkeleton } from "../home/home-skeleton";
 import { UpgradeBanner } from "../home/upgrade-banner";
 import { AboutYouCard } from "./about-you-card";
+import { MyNotesCard } from "./my-notes-card";
 import { ReadingSettingsCard } from "./reading-settings-card";
 import { SessionHighlightsCard } from "./session-highlights-card";
 
@@ -75,6 +77,25 @@ export function AnonProfile() {
         <AboutYouCard
           answers={session.profile ?? PROFILE_DEFAULTS}
           isDefaults={!session.profile}
+        />
+
+        {/* Private per-passage notes (Step 19A) — this session only, most
+            recently edited first; gone when the session ends, no database
+            row ever written for Path B. */}
+        <MyNotesCard
+          entries={loadAnonNotes()
+            .slice()
+            .sort(
+              (a, b) =>
+                new Date(b.updatedAt).getTime() -
+                new Date(a.updatedAt).getTime(),
+            )
+            .map((note) => ({
+              reference: note.reference,
+              label: note.label ?? note.reference,
+              body: note.body,
+              updatedAt: note.updatedAt,
+            }))}
         />
 
         {/* In-app highlights (Step 14) — this session only, newest first;

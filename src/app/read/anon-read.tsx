@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ANON_TOKEN_STORAGE_KEY } from "@/app/instant-access-button";
 import { AppShell } from "@/components/layout/app-shell";
@@ -15,6 +16,9 @@ import { ReadEmptyState, ReadScreen } from "./read-screen";
 // ReadScreen takes over — same reading surface as Path A.
 export function AnonRead() {
   const session = useAnonSession();
+  const searchParams = useSearchParams();
+  const ref = searchParams.get("ref");
+  const wantsNoteFocus = searchParams.get("note") === "1";
   const [state, setState] = useState<PlanState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -57,17 +61,28 @@ export function AnonRead() {
           Today&rsquo;s reading could not be loaded. Please try again.
         </Banner>
       ) : state ? (
-        <ReadScreen
-          day={state.today}
-          language={session.language}
-          preferredVersionId={session.bibleVersionId}
-          isAnonymous
-          dayCompleted={state.completedDays.includes(state.today.dayNumber)}
-          isLastDay={state.today.dayNumber >= state.plan.lengthDays}
-          // Anonymous readers have no circle membership until Step 30 — no
-          // reflection prompt on Path B yet.
-          circleId={null}
-        />
+        (() => {
+          // Deep link from Profile "My notes" (?ref=…&note=1): open that plan
+          // day with its note focused; otherwise today's reading.
+          const targetDay = ref
+            ? state.days.find((day) => day.reference === ref)
+            : undefined;
+          const day = targetDay ?? state.today;
+          return (
+            <ReadScreen
+              day={day}
+              language={session.language}
+              preferredVersionId={session.bibleVersionId}
+              isAnonymous
+              dayCompleted={state.completedDays.includes(day.dayNumber)}
+              isLastDay={day.dayNumber >= state.plan.lengthDays}
+              // Anonymous readers have no circle membership until Step 30 — no
+              // reflection prompt on Path B yet.
+              circleId={null}
+              focusNote={!!targetDay && wantsNoteFocus}
+            />
+          );
+        })()
       ) : (
         <ReadEmptyState />
       )}
