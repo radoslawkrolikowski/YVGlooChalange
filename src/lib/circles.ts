@@ -13,6 +13,7 @@ import { db } from "@/db";
 import {
   circleMembers,
   circles,
+  messages,
   plans,
   userPlanProgress,
   users,
@@ -233,6 +234,87 @@ export async function canAttachPlan(
     .where(eq(plans.id, planId));
   if (!row) return false;
   return row.source === "predefined" || row.progressUser !== null;
+}
+
+// --- Circle thread (Step 17) ----------------------------------------------
+
+/** One posted message as the thread renders it — the original body only.
+ * Translations (message_translations) are additive and land in Step 19+. */
+export interface ThreadMessage {
+  id: string;
+  authorId: string;
+  /** Author display name — the roster shows names only. */
+  authorName: string;
+  /** The author's original, immutable words. */
+  body: string;
+  /** ISO 639-1 language of the original, or null when unknown. */
+  sourceLanguage: string | null;
+  /** ISO timestamp — the client formats the relative label and date separators. */
+  createdAt: string;
+}
+
+/** The circle header the thread screen needs — name, state, membership. */
+export interface ThreadCircle {
+  id: string;
+  name: string;
+  state: CircleState;
+}
+
+/** True when the user is a member of the circle — the thread's access gate. */
+export async function isCircleMember(
+  userId: string,
+  circleId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ userId: circleMembers.userId })
+    .from(circleMembers)
+    .where(
+      and(
+        eq(circleMembers.circleId, circleId),
+        eq(circleMembers.userId, userId),
+      ),
+    );
+  return Boolean(row);
+}
+
+/** The circle's header row, or null when it does not exist. */
+export async function loadThreadCircle(
+  circleId: string,
+): Promise<ThreadCircle | null> {
+  const [circle] = await db
+    .select({ id: circles.id, name: circles.name, state: circles.state })
+    .from(circles)
+    .where(eq(circles.id, circleId));
+  if (!circle) return null;
+  return { ...circle, state: circle.state as CircleState };
+}
+
+/** A circle's messages, oldest first — original bodies with author names. */
+export async function loadThreadMessages(
+  circleId: string,
+): Promise<ThreadMessage[]> {
+  const rows = await db
+    .select({
+      id: messages.id,
+      authorId: messages.authorId,
+      authorName: users.name,
+      body: messages.body,
+      sourceLanguage: messages.sourceLanguage,
+      createdAt: messages.createdAt,
+    })
+    .from(messages)
+    .innerJoin(users, eq(users.id, messages.authorId))
+    .where(eq(messages.circleId, circleId))
+    .orderBy(asc(messages.createdAt));
+
+  return rows.map((row) => ({
+    id: row.id,
+    authorId: row.authorId,
+    authorName: row.authorName ?? "Reader",
+    body: row.body,
+    sourceLanguage: row.sourceLanguage,
+    createdAt: row.createdAt.toISOString(),
+  }));
 }
 
 /** Count a circle's members — the size gate for join. */

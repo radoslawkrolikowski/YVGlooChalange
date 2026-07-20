@@ -375,6 +375,73 @@ export const circleMembers = pgTable(
   ],
 );
 
+// --- Circle thread (Step 17) ----------------------------------------------
+//
+// Members post text messages into their circle's thread; the thread is the
+// surface every later feature (reflections, starters, digests, translations —
+// Steps 19–28) extends. Two rules from the brief shape the schema:
+//
+//   * The original is immutable (brief §5.12, constraint #6): `body` and
+//     `sourceLanguage` are written once at post time and never modified. All
+//     translation is additive, in the separate table below.
+//   * `sourceLanguage` is the message's own language, needed by the Translation
+//     Agent (Step 19+) to decide which readers need a translation. Step 17
+//     fills it best-effort from the author's profile language (no detection
+//     call yet); nullable when the author has not set a language.
+export const messages = pgTable(
+  "messages",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    circleId: text("circle_id")
+      .notNull()
+      .references(() => circles.id, { onDelete: "cascade" }),
+    /** The member who posted — Path A only in Step 17 (no anon circle rows). */
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** The author's original words, immutable — never overwritten. */
+    body: text("body").notNull(),
+    /** ISO 639-1 code of the original's language; null when unknown. */
+    sourceLanguage: text("source_language"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // The thread is always read as "this circle's messages, oldest first".
+    index("messages_circle_created_idx").on(table.circleId, table.createdAt),
+  ],
+);
+
+// Additive, per-target-language translations of a message (brief §5.12).
+// Created here as an empty shell — the Translation Agent (Step 19+) writes
+// rows; nothing in Step 17 does. One row per (message, target language): a
+// message is never re-translated for the same language, and the original is
+// never touched. The polling thread built in Step 17 later delivers these
+// swaps for free (Decisions → translation timing: asynchronous).
+export const messageTranslations = pgTable(
+  "message_translations",
+  {
+    messageId: text("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    /** Target reader language, ISO 639-1, e.g. "es". */
+    targetLanguage: text("target_language").notNull(),
+    /** Translated text — additive; the original message.body is untouched. */
+    body: text("body").notNull(),
+    /** Model that produced the translation, as reported by Gloo. */
+    model: text("model"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.messageId, table.targetLanguage] }),
+  ],
+);
+
 export const agentLogs = pgTable("agent_logs", {
   id: serial("id").primaryKey(),
   /** Agent that made the call, e.g. "facilitator"; "dev" for dev routes. */
