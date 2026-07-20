@@ -7,6 +7,7 @@ import {
   Badge,
   Banner,
   Button,
+  ButtonLink,
   Card,
   EmptyState,
   SectionLabel,
@@ -188,6 +189,9 @@ function CircleHero({ circle }: { circle: UserCircle }) {
           </li>
         ))}
       </ul>
+      <ButtonLink href={`/circles/${circle.id}`} full>
+        Open Circle
+      </ButtonLink>
     </Card>
   );
 }
