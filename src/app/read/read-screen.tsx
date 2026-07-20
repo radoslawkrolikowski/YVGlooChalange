@@ -1,6 +1,12 @@
 "use client";
 
-import { ArrowRight, Check, ChevronDown, ExternalLink } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  ChevronDown,
+  ExternalLink,
+  MessageCircle,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ANON_TOKEN_STORAGE_KEY } from "@/app/instant-access-button";
 import {
@@ -85,6 +91,7 @@ export function ReadScreen({
   isAnonymous,
   dayCompleted,
   isLastDay,
+  circleId,
 }: {
   day: PlanDay;
   language: string | null;
@@ -96,6 +103,8 @@ export function ReadScreen({
   dayCompleted: boolean;
   /** Last day of the plan — no "Continue to Day n+1" after completing it. */
   isLastDay: boolean;
+  /** The reader's circle, if any — enables the Step 19 reflection prompt. */
+  circleId: string | null;
 }) {
   const [result, setResult] = useState<PassageResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -341,9 +350,22 @@ export function ReadScreen({
                     </p>
                   </div>
                 </div>
+                {/* The intended next step (Step 19): reflect with your circle.
+                    Routes to the thread with the composer primed for this plan
+                    day; the Escalation gate runs server-side on submit. */}
+                {circleId && (
+                  <ButtonLink
+                    href={`/circles/${circleId}?reflect=${day.dayNumber}`}
+                    full
+                  >
+                    <MessageCircle size={18} aria-hidden />
+                    Share a reflection with your circle
+                  </ButtonLink>
+                )}
                 {!isLastDay && (
                   <Button
                     full
+                    variant={circleId ? "secondary" : "primary"}
                     // Full navigation, not client routing: /read always
                     // resolves "today" fresh — Path A re-reads the active
                     // progress row, Path B re-reads the re-minted token.

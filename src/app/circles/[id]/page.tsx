@@ -4,24 +4,34 @@ import { HeaderMenu } from "@/components/layout/header-menu";
 import { auth } from "@/lib/auth";
 import {
   isCircleMember,
+  loadCirclePlanDay,
   loadThreadCircle,
   loadThreadMessages,
+  type CirclePlanDay,
 } from "@/lib/circles";
 import { CircleThread } from "./thread";
 
 export const dynamic = "force-dynamic";
 
-// The circle thread screen (Step 17): a member's messaging surface for one
-// circle, composed in the 8C responsive shell. Path A only — anonymous
-// sessions have no circle membership until the demo circle (Step 30), so they
-// fall back to /circles. Membership is the access gate: a non-member (or a
-// missing circle) is bounced to the circles list rather than shown a thread.
+// The circle thread screen (Step 17; extended in Step 19): a member's
+// messaging surface for one circle, composed in the 8C responsive shell. Path A
+// only — anonymous sessions have no circle membership until the demo circle
+// (Step 30), so they fall back to /circles. Membership is the access gate: a
+// non-member (or a missing circle) is bounced to the circles list.
+//
+// Step 19: arriving with ?reflect=<dayNumber> (from "Finished reading") primes
+// the composer for a reflection on that plan day. The day is resolved from the
+// circle's own plan server-side — a bad or unknown param simply falls back to
+// ordinary chat.
 export default async function CircleThreadPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ reflect?: string }>;
 }) {
   const { id: circleId } = await params;
+  const { reflect } = await searchParams;
   const session = await auth();
   if (!session?.user) redirect("/circles");
 
@@ -32,6 +42,13 @@ export default async function CircleThreadPage({
   if (!circle || !member) redirect("/circles");
 
   const initialMessages = await loadThreadMessages(circleId);
+
+  // Resolve the reflection day only for a well-formed, real plan day.
+  let reflectionDay: CirclePlanDay | null = null;
+  const reflectDay = reflect ? Number(reflect) : NaN;
+  if (Number.isInteger(reflectDay) && reflectDay >= 1) {
+    reflectionDay = await loadCirclePlanDay(circleId, reflectDay);
+  }
 
   return (
     <AppShell
@@ -46,6 +63,7 @@ export default async function CircleThreadPage({
         circle={circle}
         currentUserId={session.user.id}
         initialMessages={initialMessages}
+        reflectionDay={reflectionDay}
       />
     </AppShell>
   );

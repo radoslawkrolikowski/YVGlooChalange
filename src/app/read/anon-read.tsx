@@ -64,6 +64,9 @@ export function AnonRead() {
           isAnonymous
           dayCompleted={state.completedDays.includes(state.today.dayNumber)}
           isLastDay={state.today.dayNumber >= state.plan.lengthDays}
+          // Anonymous readers have no circle membership until Step 30 — no
+          // reflection prompt on Path B yet.
+          circleId={null}
         />
       ) : (
         <ReadEmptyState />
