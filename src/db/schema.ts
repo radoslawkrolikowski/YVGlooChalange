@@ -279,6 +279,46 @@ export const userPlanProgress = pgTable(
   ],
 );
 
+// --- Pre-reading prompt cache (Step 15) -----------------------------------
+//
+// The PreReading agent generates 2–3 short personal prompts when a signed-in
+// user opens today's passage; this table caches them per (user, passage
+// reference) so reopening the same passage never re-calls Gloo (brief §5.5,
+// "generated once per user per day" — each plan day is a distinct passage).
+// Prompts are private to their owner and never shared with the circle. Path B
+// (Instant Access) has no row here: anonymous prompts are generated live and
+// cached in browser sessionStorage only, mirroring in-app highlights (no
+// database row, per the brief). `language` is stored so the row is
+// regenerated in place when the user's preferred language changes.
+export const preReadingPrompts = pgTable(
+  "pre_reading_prompts",
+  {
+    id: serial("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** USFM passage reference the prompts were generated for, e.g. "PSA.23". */
+    reference: text("reference").notNull(),
+    /** Language the prompts were generated in — regenerate on a mismatch. */
+    language: text("language").notNull(),
+    /** The 2–3 generated prompt strings, in the user's language. */
+    prompts: text("prompts").array().notNull(),
+    /** Model that served the generation, as reported by Gloo. */
+    model: text("model"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // One cache row per user per passage — the idempotency fence behind
+    // "generated once per user per day".
+    uniqueIndex("pre_reading_prompts_user_reference_idx").on(
+      table.userId,
+      table.reference,
+    ),
+  ],
+);
+
 export const agentLogs = pgTable("agent_logs", {
   id: serial("id").primaryKey(),
   /** Agent that made the call, e.g. "facilitator"; "dev" for dev routes. */

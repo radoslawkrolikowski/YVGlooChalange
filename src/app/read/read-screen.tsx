@@ -19,6 +19,7 @@ import {
 } from "@/lib/anon-highlights";
 import type { PlanDay } from "@/lib/plans";
 import { HighlightablePassage } from "./highlightable-passage";
+import { PreReadingCard } from "./pre-reading-card";
 import { VersionSwitcherSheet } from "./version-switcher-sheet";
 
 /*
@@ -294,6 +295,14 @@ export function ReadScreen({
           </div>
         ) : result ? (
           <>
+            {/* Personalised pre-reading prompts, above the passage (Step 15).
+                Fetches independently; hides itself silently on failure so the
+                reading experience never blocks on it. */}
+            <PreReadingCard
+              reference={day.reference}
+              isAnonymous={isAnonymous}
+            />
+
             <p className="text-xs text-ink-faint">
               Select any phrase to save a highlight — only you can see it.
             </p>
