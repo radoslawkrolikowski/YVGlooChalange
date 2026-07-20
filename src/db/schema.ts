@@ -405,6 +405,17 @@ export const messages = pgTable(
     body: text("body").notNull(),
     /** ISO 639-1 code of the original's language; null when unknown. */
     sourceLanguage: text("source_language"),
+    // Message-type groundwork (Step 19). "message" is an ordinary member post;
+    // "reflection" is a day-tagged reflection that passed the Escalation gate
+    // (Step 19). Kept as free text with a default so future kinds (Step 20's
+    // system-attributed "Round" posts, digests, starters) need no migration —
+    // Step 20 depends on this column existing.
+    kind: text("kind").notNull().default("message"),
+    // Set only on reflection posts (kind = "reflection"): the plan day the
+    // reflection is tied to and the human-readable passage label the thread
+    // card shows ("Psalm 23"). Null on ordinary messages.
+    dayNumber: integer("day_number"),
+    dayLabel: text("day_label"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -439,6 +450,58 @@ export const messageTranslations = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.messageId, table.targetLanguage] }),
+  ],
+);
+
+// --- Reflections (Step 19) ------------------------------------------------
+//
+// The canonical record of every daily reflection — flagged AND unflagged. A
+// reflection is a distinct submission type, not an ordinary message: it always
+// passes the Escalation Agent synchronously first (brief §5.11, constraint #2),
+// carries the plan day it responds to, and only then, if UNFLAGGED, is posted
+// to the circle thread as a `messages` row (kind = "reflection"), linked back
+// through `messageId`.
+//
+// FLAGGED reflections are saved here with `flagged = true` and NO message row
+// (messageId stays null): private to their author, never posted to the thread,
+// and excluded from Facilitator digest input (plan → Decisions → escalation
+// handling; Step 24 reads `where flagged = false`). Only the reflection's id
+// (never its text) reaches escalation_audit.
+export const reflections = pgTable(
+  "reflections",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    circleId: text("circle_id")
+      .notNull()
+      .references(() => circles.id, { onDelete: "cascade" }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 1-based plan day this reflection responds to. */
+    dayNumber: integer("day_number").notNull(),
+    /** USFM passage reference of that day, e.g. "PSA.23". */
+    reference: text("reference").notNull(),
+    /** Human-readable label for the day, e.g. "Psalm 23". */
+    label: text("label").notNull(),
+    /** The author's original words, immutable — never overwritten. */
+    body: text("body").notNull(),
+    /** ISO 639-1 code of the original's language; null when unknown. */
+    sourceLanguage: text("source_language"),
+    /** True when the Escalation Agent flagged a crisis signal — kept private. */
+    flagged: boolean("flagged").notNull().default(false),
+    /** The thread message this reflection was posted as; null when flagged. */
+    messageId: text("message_id").references(() => messages.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // The Facilitator (Step 24) reads a circle's reflections for one plan day.
+    index("reflections_circle_day_idx").on(table.circleId, table.dayNumber),
   ],
 );
 

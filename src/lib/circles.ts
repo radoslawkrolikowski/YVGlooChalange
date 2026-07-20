@@ -14,6 +14,7 @@ import {
   circleMembers,
   circles,
   messages,
+  planDays,
   plans,
   userPlanProgress,
   users,
@@ -239,7 +240,7 @@ export async function canAttachPlan(
 // --- Circle thread (Step 17) ----------------------------------------------
 
 /** One posted message as the thread renders it — the original body only.
- * Translations (message_translations) are additive and land in Step 19+. */
+ * Translations (message_translations) are additive and land in Step 25. */
 export interface ThreadMessage {
   id: string;
   authorId: string;
@@ -249,6 +250,12 @@ export interface ThreadMessage {
   body: string;
   /** ISO 639-1 language of the original, or null when unknown. */
   sourceLanguage: string | null;
+  /** "message" (ordinary post) or "reflection" (day-tagged, Step 19). */
+  kind: "message" | "reflection";
+  /** The plan day a reflection responds to; null on ordinary messages. */
+  dayNumber: number | null;
+  /** Human-readable passage label for a reflection card; null otherwise. */
+  dayLabel: string | null;
   /** ISO timestamp — the client formats the relative label and date separators. */
   createdAt: string;
 }
@@ -300,6 +307,9 @@ export async function loadThreadMessages(
       authorName: users.name,
       body: messages.body,
       sourceLanguage: messages.sourceLanguage,
+      kind: messages.kind,
+      dayNumber: messages.dayNumber,
+      dayLabel: messages.dayLabel,
       createdAt: messages.createdAt,
     })
     .from(messages)
@@ -313,8 +323,42 @@ export async function loadThreadMessages(
     authorName: row.authorName ?? "Reader",
     body: row.body,
     sourceLanguage: row.sourceLanguage,
+    kind: row.kind === "reflection" ? "reflection" : "message",
+    dayNumber: row.dayNumber,
+    dayLabel: row.dayLabel,
     createdAt: row.createdAt.toISOString(),
   }));
+}
+
+/** A circle's plan day, resolved for priming the reflection composer. */
+export interface CirclePlanDay {
+  dayNumber: number;
+  /** USFM reference, e.g. "PSA.23". */
+  reference: string;
+  /** Human-readable label, e.g. "Psalm 23". */
+  label: string;
+}
+
+/**
+ * Resolve one day of a circle's attached plan (Step 19): the reference and
+ * label the reflection composer shows and tags the reflection with. Returns
+ * null when the circle or day does not exist, so a bad ?reflect param simply
+ * falls back to ordinary chat rather than erroring.
+ */
+export async function loadCirclePlanDay(
+  circleId: string,
+  dayNumber: number,
+): Promise<CirclePlanDay | null> {
+  const [row] = await db
+    .select({
+      dayNumber: planDays.dayNumber,
+      reference: planDays.reference,
+      label: planDays.label,
+    })
+    .from(circles)
+    .innerJoin(planDays, eq(planDays.planId, circles.planId))
+    .where(and(eq(circles.id, circleId), eq(planDays.dayNumber, dayNumber)));
+  return row ?? null;
 }
 
 /** Count a circle's members — the size gate for join. */

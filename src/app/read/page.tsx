@@ -1,6 +1,7 @@
 import { HeaderMenu } from "@/components/layout/header-menu";
 import { AppShell } from "@/components/layout/app-shell";
 import { auth } from "@/lib/auth";
+import { loadUserCircle } from "@/lib/circles";
 import { loadUserPlanState } from "@/lib/plans";
 import { AnonRead } from "./anon-read";
 import { ReadEmptyState, ReadScreen } from "./read-screen";
@@ -16,7 +17,10 @@ export default async function ReadPage() {
   const session = await auth();
 
   if (session?.user) {
-    const state = await loadUserPlanState(session.user.id);
+    const [state, userCircle] = await Promise.all([
+      loadUserPlanState(session.user.id),
+      loadUserCircle(session.user.id),
+    ]);
     return (
       <AppShell
         headerAction={
@@ -34,6 +38,7 @@ export default async function ReadPage() {
             isAnonymous={false}
             dayCompleted={state.completedDays.includes(state.today.dayNumber)}
             isLastDay={state.today.dayNumber >= state.plan.lengthDays}
+            circleId={userCircle?.id ?? null}
           />
         ) : (
           <ReadEmptyState />
