@@ -207,7 +207,10 @@ function DateSeparator({ iso }: { iso: string }) {
   return (
     <div className="flex items-center gap-3 py-1">
       <span className="h-px flex-1 bg-line" />
-      <span className="text-xs font-semibold uppercase tracking-widest text-ink-faint">
+      <span
+        suppressHydrationWarning
+        className="text-xs font-semibold uppercase tracking-widest text-ink-faint"
+      >
         {formatDay(iso)}
       </span>
       <span className="h-px flex-1 bg-line" />
@@ -225,7 +228,7 @@ function MessageRow({ message, own }: { message: ThreadMessage; own: boolean }) 
             {message.body}
           </p>
         </div>
-        <span className="px-1 text-xs text-ink-faint">
+        <span suppressHydrationWarning className="px-1 text-xs text-ink-faint">
           {formatTime(message.createdAt)}
         </span>
       </div>
@@ -240,7 +243,10 @@ function MessageRow({ message, own }: { message: ThreadMessage; own: boolean }) 
           <span className="truncate text-sm font-semibold text-ink">
             {message.authorName}
           </span>
-          <span className="shrink-0 text-xs text-ink-faint">
+          <span
+            suppressHydrationWarning
+            className="shrink-0 text-xs text-ink-faint"
+          >
             {formatTime(message.createdAt)}
           </span>
         </div>

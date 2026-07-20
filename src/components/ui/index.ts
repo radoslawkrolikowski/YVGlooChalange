@@ -17,3 +17,4 @@ export { ChoiceChips, MultiChoiceChips } from "./choice-chips";
 export { AgentThinking } from "./agent-thinking";
 export { BottomSheet } from "./bottom-sheet";
 export { VersionAttribution } from "./version-attribution";
+export { SupportCard } from "./support-card";

@@ -442,6 +442,28 @@ export const messageTranslations = pgTable(
   ],
 );
 
+// --- Escalation audit (Step 18) -------------------------------------------
+//
+// The Escalation Agent's reference-only audit trail (brief §5.11, plan →
+// Decisions → escalation handling). One row per FLAGGED reflection recording
+// ONLY the reflection reference and a timestamp — never the reflection text,
+// never a snippet, never the detected category, never who wrote it. The
+// content-free guarantee is structural: this table has no column that could
+// hold user words. Written by src/lib/escalation.ts when a reflection flags;
+// unflagged reflections write nothing here.
+export const escalationAudit = pgTable(
+  "escalation_audit",
+  {
+    id: serial("id").primaryKey(),
+    /** Reference to the flagged reflection — the only identifier ever stored. */
+    reflectionRef: text("reflection_ref").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("escalation_audit_ref_idx").on(table.reflectionRef)],
+);
+
 export const agentLogs = pgTable("agent_logs", {
   id: serial("id").primaryKey(),
   /** Agent that made the call, e.g. "facilitator"; "dev" for dev routes. */
