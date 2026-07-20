@@ -1,29 +1,36 @@
-"use client";
-
 import { AppShell } from "@/components/layout/app-shell";
-import { EmptyState, SkeletonText } from "@/components/ui";
-import { useAnonSession } from "@/lib/use-anon-session";
-import { UpgradeBanner } from "../home/upgrade-banner";
+import { HeaderMenu } from "@/components/layout/header-menu";
+import { auth } from "@/lib/auth";
+import { listOpenCircles, loadUserCircle } from "@/lib/circles";
+import { AnonCircles } from "./anon-circles";
+import { CirclesScreen } from "./circles-screen";
 
-// Placeholder tab target (Step 8A shell). Circles arrive with Step 16.
-export default function CirclesPage() {
-  const session = useAnonSession();
+export const dynamic = "force-dynamic";
 
-  if (!session) {
+// The /circles tab (Step 16), mirroring /home and /plan's session split: Path A
+// resolves the user's circle and the open-circle list server-side; everyone
+// else falls through to the client-side Instant Access guard.
+export default async function CirclesPage() {
+  const session = await auth();
+
+  if (session?.user) {
+    const [circle, open] = await Promise.all([
+      loadUserCircle(session.user.id),
+      listOpenCircles(session.user.id),
+    ]);
     return (
-      <AppShell>
-        <SkeletonText lines={4} />
+      <AppShell
+        headerAction={
+          <HeaderMenu
+            displayName={session.user.name ?? "YouVersion reader"}
+            isAnonymous={false}
+          />
+        }
+      >
+        <CirclesScreen initialCircle={circle} initialOpen={open} />
       </AppShell>
     );
   }
 
-  return (
-    <AppShell banner={<UpgradeBanner />}>
-      <EmptyState
-        icon="◎"
-        heading="No circles yet"
-        subtext="Reading circles are on their way. You will create, browse, and join them here."
-      />
-    </AppShell>
-  );
+  return <AnonCircles />;
 }

@@ -319,6 +319,62 @@ export const preReadingPrompts = pgTable(
   ],
 );
 
+// --- Circles (Step 16) ----------------------------------------------------
+//
+// A circle is a small group (min 2, max 5) reading one attached plan
+// together. State moves forming → active → stalled → archived: Step 16 drives
+// forming↔active only (a circle flips to `active` the moment it reaches two
+// members); stalled/archived are the Health Agent's job (Step 34). The
+// attached `planId` is the plan every member reads — joining aligns the
+// member's active plan to it (Step 12A pause), so everything downstream
+// (digests, starters, reminders) can assume members share one plan.
+export const circles = pgTable("circles", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  /** The plan every member reads — references a plans row (Step 11/12). */
+  planId: text("plan_id")
+    .notNull()
+    .references(() => plans.id),
+  /** forming / active / stalled / archived — see the table comment. */
+  state: text("state").notNull().default("forming"),
+  /** The founding member; kept for attribution, membership lives below. */
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// One row per (circle, member). No progress, pace, or completion is ever
+// stored here or joined into any circle-facing view — the brief's
+// no-comparison constraint means the members list exposes display names only.
+// A user belongs to at most one circle at a time in Step 16 (Home assumes a
+// single active circle; the shared-plan rule makes two memberships
+// incoherent) — enforced by the partial unique index below.
+export const circleMembers = pgTable(
+  "circle_members",
+  {
+    circleId: text("circle_id")
+      .notNull()
+      .references(() => circles.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    joinedAt: timestamp("joined_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.circleId, table.userId] }),
+    // At most one circle per user in Step 16.
+    uniqueIndex("circle_members_one_per_user_idx").on(table.userId),
+    index("circle_members_circle_idx").on(table.circleId),
+  ],
+);
+
 export const agentLogs = pgTable("agent_logs", {
   id: serial("id").primaryKey(),
   /** Agent that made the call, e.g. "facilitator"; "dev" for dev routes. */
