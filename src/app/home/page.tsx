@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { HeaderMenu } from "@/components/layout/header-menu";
 import { AppShell } from "@/components/layout/app-shell";
 import { auth } from "@/lib/auth";
+import { loadUserCircle } from "@/lib/circles";
 import { loadUserPlanState } from "@/lib/plans";
 import { AnonHome } from "./anon-home";
 import { HomeScreen } from "./home-screen";
@@ -22,7 +23,10 @@ export default async function HomePage() {
     if (session.user.highlightsConsent === null) redirect("/consent");
     if (session.user.language === null) redirect("/onboarding");
     const displayName = session.user.name ?? "YouVersion reader";
-    const planState = await loadUserPlanState(session.user.id);
+    const [planState, userCircle] = await Promise.all([
+      loadUserPlanState(session.user.id),
+      loadUserCircle(session.user.id),
+    ]);
     return (
       <AppShell
         headerAction={
@@ -41,6 +45,9 @@ export default async function HomePage() {
                   passageReference: planState.today.label,
                 }
               : null
+          }
+          circle={
+            userCircle ? { heading: userCircle.name, activity: [] } : null
           }
         />
       </AppShell>
