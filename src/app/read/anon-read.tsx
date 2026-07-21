@@ -68,6 +68,11 @@ export function AnonRead() {
             ? state.days.find((day) => day.reference === ref)
             : undefined;
           const day = targetDay ?? state.today;
+          // The day after the one on screen — not "today" when the reader
+          // opened an earlier day from the plan's day list.
+          const nextReference =
+            state.days.find((d) => d.dayNumber === day.dayNumber + 1)
+              ?.reference ?? null;
           return (
             <ReadScreen
               day={day}
@@ -76,6 +81,7 @@ export function AnonRead() {
               isAnonymous
               dayCompleted={state.completedDays.includes(day.dayNumber)}
               isLastDay={day.dayNumber >= state.plan.lengthDays}
+              nextReference={nextReference}
               // Anonymous readers have no circle membership until Step 30 — no
               // reflection prompt on Path B yet.
               circleId={null}

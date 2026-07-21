@@ -35,6 +35,11 @@ export default async function ReadPage({
       : undefined;
     const day = targetDay ?? state?.today;
     const focusNote = !!targetDay && params.note === "1";
+    // The day after the one on screen — which is not "today" when the reader
+    // opened an earlier day from the plan's day list.
+    const nextReference =
+      state?.days.find((d) => d.dayNumber === (day?.dayNumber ?? 0) + 1)
+        ?.reference ?? null;
     return (
       <AppShell
         headerAction={
@@ -52,6 +57,7 @@ export default async function ReadPage({
             isAnonymous={false}
             dayCompleted={state.completedDays.includes(day.dayNumber)}
             isLastDay={day.dayNumber >= state.plan.lengthDays}
+            nextReference={nextReference}
             circleId={userCircle?.id ?? null}
             focusNote={focusNote}
           />
