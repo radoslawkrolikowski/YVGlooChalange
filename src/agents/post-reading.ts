@@ -1,11 +1,12 @@
 // PostReading Agent — real implementation (Step 20).
 //
-// When a member finishes a day's reading, generates 2–3 circle-facing
-// discussion questions via Gloo, grounded in the specific passage (fetched
-// from YouVersion by the caller — never by Gloo), the phrases the member
-// highlighted during this reading session, and the pre-reading prompts they
-// were shown (Step 15), so the circle's conversation continues the thread the
-// reader was already pulling on.
+// When the FIRST member of a circle finishes a day's reading, generates 2–3
+// circle-facing discussion questions via Gloo, grounded in the specific passage
+// (fetched from YouVersion by the caller — never by Gloo), the phrases that
+// member highlighted during their reading session, and the pre-reading prompts
+// they were shown (Step 15), so the circle's conversation continues the thread
+// that reader was already pulling on. One card per circle per day: later
+// finishers do not each get their own (see src/lib/post-reading.ts).
 //
 // Unlike the PreReading agent's output, these are CIRCLE-facing: they are
 // posted to the thread attributed to "Round". They must therefore never reveal

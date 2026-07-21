@@ -520,14 +520,20 @@ export const reflections = pgTable(
 // here as an array so the thread can render each one as an individually
 // replyable line rather than a wall of text.
 //
-// The unique index IS the idempotency fence ("exactly once per user per day",
-// keyed on the PLAN day): the row is claimed with an empty `questions` array
-// BEFORE the Gloo call, so a concurrent or repeated "Finished reading" hits the
-// conflict and exits without calling Gloo. A failed generation deletes its own
-// claim row so the next completion can retry. This is the same discipline
-// Step 23's `agent_runs` table generalises; the output-table constraint here is
-// the second fence that plan step describes, landing early because starters
-// ship before the scheduling backbone.
+// The unique index IS the idempotency fence: ONE card per circle per PLAN day.
+// The row is claimed with an empty `questions` array BEFORE the Gloo call, so
+// the second, third and fourth member to finish the same day all hit the
+// conflict and exit without calling Gloo — the thread gets one starter card,
+// not one per reader. A failed generation deletes its own claim row so the next
+// member to finish can retry. This is the same discipline Step 23's
+// `agent_runs` table generalises; the output-table constraint here is the
+// second fence that plan step describes, landing early because starters ship
+// before the scheduling backbone.
+//
+// `userId` is kept as *who triggered it* — the first member to finish that day,
+// whose session highlights and pre-reading prompts ground the questions. It is
+// attribution and debugging context, never shown in the thread, and no longer
+// part of the key.
 export const conversationStarters = pgTable(
   "conversation_starters",
   {
@@ -537,7 +543,9 @@ export const conversationStarters = pgTable(
     circleId: text("circle_id")
       .notNull()
       .references(() => circles.id, { onDelete: "cascade" }),
-    /** The member whose reading produced them — never shown in the thread. */
+    /** The first member to finish this day — their highlights and prompts
+     * ground the questions. Attribution only; never shown in the thread and
+     * not part of the idempotency key. */
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -562,8 +570,7 @@ export const conversationStarters = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("conversation_starters_user_circle_day_idx").on(
-      table.userId,
+    uniqueIndex("conversation_starters_circle_day_idx").on(
       table.circleId,
       table.dayNumber,
     ),

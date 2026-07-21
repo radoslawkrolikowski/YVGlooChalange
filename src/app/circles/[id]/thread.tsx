@@ -429,9 +429,11 @@ function SystemMessage({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-semibold text-ink">Round</span>
-          {/* Names what Round is, so the post can never read as a member. */}
+          {/* Names what Round is, so the post can never read as a member.
+              Deliberately not "Facilitator": that is the name of a specific
+              agent (Step 24's digest), and this identity is shared by several. */}
           <span className="shrink-0 rounded-full bg-sage-soft px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-widest text-primary">
-            Facilitator
+            Round AI
           </span>
           <span
             suppressHydrationWarning

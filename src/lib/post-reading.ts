@@ -7,11 +7,14 @@
 // and posts the result to the thread as a system message attributed to "Round"
 // (messages.kind = "starters", authorId null).
 //
-// Idempotency ("exactly once per user per plan day") is a database fence, not
-// a check-then-act: the conversation_starters row is CLAIMED with an empty
-// questions array before the Gloo call, so a repeated or concurrent completion
-// loses the unique-index race and exits without spending a call. A generation
-// or post failure deletes its own claim so the next completion can retry.
+// Idempotency ("exactly one card per circle per plan day") is a database fence,
+// not a check-then-act: the conversation_starters row is CLAIMED with an empty
+// questions array before the Gloo call, so every later member finishing the
+// same day loses the unique-index race and exits without spending a call. The
+// thread therefore gets one starter card per day, grounded in the FIRST
+// finisher's highlights and prompts, rather than one card per reader. A
+// generation or post failure deletes its own claim so the next member to
+// finish can retry.
 //
 // Path A only — anonymous sessions have no circle membership until Step 30, so
 // there is nothing to post to and this module is never reached for them.
@@ -85,11 +88,12 @@ async function loadShownPrompts(
 }
 
 /**
- * Generate and post this reader's conversation starters for one plan day.
+ * Generate and post the circle's conversation starters for one plan day.
  *
- * Returns the posted message id, or null when nothing was posted — already
- * done for this user+day, the day is not part of the circle's plan, or the
- * passage/generation failed. Never throws: finishing a reading must succeed
+ * Returns the posted message id, or null when nothing was posted — the card
+ * already exists for this circle+day (another member got there first, or this
+ * member re-completed the day), the day is not part of the circle's plan, or
+ * the passage/generation failed. Never throws: finishing a reading must succeed
  * even when Round has nothing to say, so every failure path is swallowed here
  * after cleaning up its claim row.
  */
@@ -112,11 +116,7 @@ export async function postConversationStarters(
       language: input.language,
     })
     .onConflictDoNothing({
-      target: [
-        conversationStarters.userId,
-        conversationStarters.circleId,
-        conversationStarters.dayNumber,
-      ],
+      target: [conversationStarters.circleId, conversationStarters.dayNumber],
     })
     .returning({ id: conversationStarters.id });
   if (!claim) return null;
