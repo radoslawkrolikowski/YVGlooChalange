@@ -253,18 +253,26 @@ export function CircleThread({
   );
 }
 
-/** The empty state before the first message is posted. */
+/**
+ * The waiting state before the circle activates. A forming circle (one reader
+ * so far) shows a designed "waiting for 1 more reader" state, not a blank
+ * thread and — per brief §5.2 — not a "say hi" prompt: when a second reader
+ * joins, Round opens the conversation itself with the cold-start icebreaker
+ * (Step 22), so the first thing this thread ever shows is that welcome. The
+ * "no messages" branch is only a graceful fallback should an active circle's
+ * icebreaker generation have failed.
+ */
 function EmptyThread({ state }: { state: ThreadCircle["state"] }) {
+  const forming = state === "forming";
   return (
     <div className="rounded-lg border border-line bg-surface px-6 py-10 text-center">
       <p className="font-serif text-lg font-semibold text-ink">
-        {state === "forming"
-          ? "Waiting for one more reader to begin."
-          : "No messages yet."}
+        {forming ? "Waiting for 1 more reader" : "No messages yet."}
       </p>
       <p className="mt-1 text-sm text-ink-soft">
-        Say something to open the conversation — a thought, a greeting, a
-        question from today&rsquo;s reading.
+        {forming
+          ? "Your circle opens when a second reader joins — Round will start the conversation for you both."
+          : "Say something to open the conversation — a thought, a greeting, a question from today’s reading."}
       </p>
     </div>
   );
@@ -291,7 +299,9 @@ function MessageList({
         return (
           <div key={message.id} className="flex flex-col gap-3">
             {showSeparator && <DateSeparator iso={message.createdAt} />}
-            {message.kind === "starters" ? (
+            {message.kind === "icebreaker" ? (
+              <IcebreakerRow message={message} />
+            ) : message.kind === "starters" ? (
               <StartersRow message={message} onReply={onReplyToQuestion} />
             ) : message.kind === "reflection" ? (
               <ReflectionRow
@@ -500,6 +510,23 @@ function StartersRow({
           </li>
         ))}
       </ol>
+    </SystemMessage>
+  );
+}
+
+/**
+ * The cold-start icebreaker (Step 22): the very first message in every new
+ * circle, posted by Round when the circle reaches two members. It references
+ * something specific from both members' onboarding answers, so it renders as
+ * warm prose through the shared system-message frame — same Round identity as
+ * the starters and (later) the digest, never mistakable for a member message.
+ */
+function IcebreakerRow({ message }: { message: ThreadMessage }) {
+  return (
+    <SystemMessage createdAt={message.createdAt} label="Welcome to your circle">
+      <p className="whitespace-pre-wrap break-words font-serif text-[0.98rem] leading-relaxed text-ink">
+        {message.body}
+      </p>
     </SystemMessage>
   );
 }
