@@ -41,12 +41,15 @@ export function CircleThread({
   currentUserId,
   initialMessages,
   reflectionDay,
+  alreadyReflected = false,
 }: {
   circle: ThreadCircle;
   currentUserId: string;
   initialMessages: ThreadMessage[];
   /** Set when arriving from "Finished reading" — primes reflection mode. */
   reflectionDay: CirclePlanDay | null;
+  /** This member already reflected on that day — allowed, but said out loud. */
+  alreadyReflected?: boolean;
 }) {
   const [messages, setMessages] = useState<ThreadMessage[]>(initialMessages);
   const [draft, setDraft] = useState("");
@@ -238,6 +241,7 @@ export function CircleThread({
         sending={sending}
         reflectionMode={inReflectionMode}
         reflectionDay={reflectionDay}
+        alreadyReflected={alreadyReflected}
         replyTo={replyTo}
         onChange={setDraft}
         onKeyDown={onComposerKeyDown}
@@ -509,6 +513,7 @@ function Composer({
   sending,
   reflectionMode,
   reflectionDay,
+  alreadyReflected,
   replyTo,
   onChange,
   onKeyDown,
@@ -521,6 +526,7 @@ function Composer({
   sending: boolean;
   reflectionMode: boolean;
   reflectionDay: CirclePlanDay | null;
+  alreadyReflected: boolean;
   /** Round's starter question being answered, shown while typing (Step 20). */
   replyTo: string | null;
   onChange: (value: string) => void;
@@ -559,7 +565,9 @@ function Composer({
             <span className="font-semibold text-ink">
               Reflecting on {reflectionDay.label}
             </span>{" "}
-            — share what today&rsquo;s passage stirred in you.
+            {alreadyReflected
+              ? "— you've already shared one on this passage; this adds another."
+              : "— share what today's passage stirred in you."}
           </p>
           <button
             type="button"

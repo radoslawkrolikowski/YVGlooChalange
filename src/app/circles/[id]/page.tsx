@@ -9,6 +9,7 @@ import {
   loadThreadMessages,
   type CirclePlanDay,
 } from "@/lib/circles";
+import { loadOwnReflection } from "@/lib/reflections";
 import { CircleThread } from "./thread";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +51,16 @@ export default async function CircleThreadPage({
     reflectionDay = await loadCirclePlanDay(circleId, reflectDay);
   }
 
+  // Reflecting twice on a day is allowed; the composer just says so, so the
+  // second one is deliberate (Step 19).
+  const alreadyReflected = reflectionDay
+    ? (await loadOwnReflection(
+        circleId,
+        session.user.id,
+        reflectionDay.dayNumber,
+      )) !== null
+    : false;
+
   return (
     <AppShell
       headerAction={
@@ -64,6 +75,7 @@ export default async function CircleThreadPage({
         currentUserId={session.user.id}
         initialMessages={initialMessages}
         reflectionDay={reflectionDay}
+        alreadyReflected={alreadyReflected}
       />
     </AppShell>
   );

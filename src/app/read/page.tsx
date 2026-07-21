@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { auth } from "@/lib/auth";
 import { loadUserCircle } from "@/lib/circles";
 import { loadUserPlanState } from "@/lib/plans";
+import { loadOwnReflection } from "@/lib/reflections";
 import { AnonRead } from "./anon-read";
 import { ReadEmptyState, ReadScreen } from "./read-screen";
 
@@ -40,6 +41,12 @@ export default async function ReadPage({
     const nextReference =
       state?.days.find((d) => d.dayNumber === (day?.dayNumber ?? 0) + 1)
         ?.reference ?? null;
+    // Whether this reader has already reflected on the day on screen — softens
+    // the reflection call to action rather than removing it (Step 19).
+    const ownReflection =
+      userCircle && day
+        ? await loadOwnReflection(userCircle.id, session.user.id, day.dayNumber)
+        : null;
     return (
       <AppShell
         headerAction={
@@ -59,6 +66,7 @@ export default async function ReadPage({
             isLastDay={day.dayNumber >= state.plan.lengthDays}
             nextReference={nextReference}
             circleId={userCircle?.id ?? null}
+            ownReflection={ownReflection}
             focusNote={focusNote}
           />
         ) : (

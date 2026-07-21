@@ -79,6 +79,12 @@ function anonHeaders(): Record<string, string> {
   return token ? { "x-round-session": token } : {};
 }
 
+/** Shorten a quoted reflection to a glanceable preview. */
+function truncate(text: string, max: number): string {
+  const clean = text.trim().replace(/\s+/g, " ");
+  return clean.length <= max ? clean : `${clean.slice(0, max - 1)}…`;
+}
+
 /** One highlight as the reading screen tracks it, either path. */
 interface HighlightEntry {
   versionId: number;
@@ -94,6 +100,7 @@ export function ReadScreen({
   isLastDay,
   nextReference = null,
   circleId,
+  ownReflection = null,
   focusNote = false,
 }: {
   day: PlanDay;
@@ -112,6 +119,10 @@ export function ReadScreen({
   nextReference?: string | null;
   /** The reader's circle, if any — enables the Step 19 reflection prompt. */
   circleId: string | null;
+  /** This reader's already-posted reflection for this day, if any. Reflecting
+   * again is allowed (a reader may return to a passage with new words), so
+   * this only softens the affordance — it never disables it. */
+  ownReflection?: { body: string; createdAt: string } | null;
   /** Deep-linked from Profile's "My notes" — open the note expanded, focused. */
   focusNote?: boolean;
 }) {
@@ -371,20 +382,40 @@ export function ReadScreen({
                 </div>
                 {/* The intended next step (Step 19): reflect with your circle.
                     Routes to the thread with the composer primed for this plan
-                    day; the Escalation gate runs server-side on submit. */}
+                    day; the Escalation gate runs server-side on submit.
+
+                    Having already reflected does not close the door — a reader
+                    returning to a passage may have new words for it. It only
+                    steps the action down from primary and says so plainly, so
+                    a second reflection is chosen rather than stumbled into. */}
                 {circleId && (
-                  <ButtonLink
-                    href={`/circles/${circleId}?reflect=${day.dayNumber}`}
-                    full
-                  >
-                    <MessageCircle size={18} aria-hidden />
-                    Share a reflection with your circle
-                  </ButtonLink>
+                  <>
+                    <ButtonLink
+                      href={`/circles/${circleId}?reflect=${day.dayNumber}`}
+                      variant={ownReflection ? "secondary" : "primary"}
+                      full
+                    >
+                      <MessageCircle size={18} aria-hidden />
+                      {ownReflection
+                        ? "Add another reflection"
+                        : "Share a reflection with your circle"}
+                    </ButtonLink>
+                    {ownReflection && (
+                      <p className="-mt-1 text-xs text-ink-faint">
+                        You already shared a reflection on this passage:{" "}
+                        <span className="italic">
+                          &ldquo;{truncate(ownReflection.body, 90)}&rdquo;
+                        </span>
+                      </p>
+                    )}
+                  </>
                 )}
                 {!isLastDay && (
                   <Button
                     full
-                    variant={circleId ? "secondary" : "primary"}
+                    // One primary action on screen: reflecting leads while it
+                    // is still unsaid, moving on leads once it is said.
+                    variant={circleId && !ownReflection ? "secondary" : "primary"}
                     // Full navigation, not client routing, so the next day's
                     // state is resolved fresh — Path A re-reads the active
                     // progress row, Path B the re-minted token. Targets the

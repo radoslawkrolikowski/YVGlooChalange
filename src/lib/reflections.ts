@@ -18,7 +18,7 @@
 // safe and NOTHING is written — a reflection is never accepted while the gate
 // is unresolved.
 
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { messages, reflections } from "@/db/schema";
 import { screenReflection } from "@/lib/escalation";
@@ -106,4 +106,46 @@ export async function submitReflection(
     .where(eq(reflections.id, reflectionId));
 
   return { flagged: false, resources: [] };
+}
+
+/** A reflection this member already posted for a plan day. */
+export interface OwnReflectionSummary {
+  body: string;
+  createdAt: string;
+}
+
+/**
+ * The member's most recent POSTED reflection for one plan day, or null.
+ *
+ * Reflecting twice on the same day is deliberately allowed — a reader who
+ * returns to a passage days later may finally have words for it, and the
+ * no-comparison/self-paced constraints mean the app never tells someone they
+ * have already had their turn. This exists so the UI can say "you've already
+ * reflected on this day" and make a second one a considered act rather than an
+ * accident; it is not a gate.
+ *
+ * Flagged reflections are excluded: they never reached the thread, so the
+ * member has not actually contributed to it, and their text must not be echoed
+ * back to them in a "you already said this" affordance.
+ */
+export async function loadOwnReflection(
+  circleId: string,
+  authorId: string,
+  dayNumber: number,
+): Promise<OwnReflectionSummary | null> {
+  const [row] = await db
+    .select({ body: reflections.body, createdAt: reflections.createdAt })
+    .from(reflections)
+    .where(
+      and(
+        eq(reflections.circleId, circleId),
+        eq(reflections.authorId, authorId),
+        eq(reflections.dayNumber, dayNumber),
+        eq(reflections.flagged, false),
+      ),
+    )
+    .orderBy(desc(reflections.createdAt))
+    .limit(1);
+  if (!row) return null;
+  return { body: row.body, createdAt: row.createdAt.toISOString() };
 }
