@@ -252,9 +252,10 @@ export interface ThreadMessage {
   body: string;
   /** ISO 639-1 language of the original, or null when unknown. */
   sourceLanguage: string | null;
-  /** "message" (ordinary post), "reflection" (day-tagged, Step 19), or
-   * "starters" (Round's conversation-starter card, Step 20). */
-  kind: "message" | "reflection" | "starters";
+  /** "message" (ordinary post), "reflection" (day-tagged, Step 19),
+   * "starters" (Round's conversation-starter card, Step 20), or "icebreaker"
+   * (Round's cold-start opening message, Step 22). */
+  kind: "message" | "reflection" | "starters" | "icebreaker";
   /** The plan day a reflection or starter set responds to; null otherwise. */
   dayNumber: number | null;
   /** Human-readable passage label for a reflection/starters card; else null. */
@@ -305,6 +306,7 @@ export async function loadThreadCircle(
 function threadKind(kind: string): ThreadMessage["kind"] {
   if (kind === "reflection") return "reflection";
   if (kind === "starters") return "starters";
+  if (kind === "icebreaker") return "icebreaker";
   return "message";
 }
 

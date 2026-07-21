@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { db } from "@/db";
 import {
   circleMembers,
@@ -14,6 +14,7 @@ import {
   memberCount,
   userHasCircle,
 } from "@/lib/circles";
+import { postIcebreaker } from "@/lib/icebreaker";
 import { resolveSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -121,12 +122,17 @@ export async function POST(
     .insert(circleMembers)
     .values({ circleId: circle.id, userId: session.userId });
 
-  // Flip forming → active the moment the circle reaches minimum size.
+  // Flip forming → active the moment the circle reaches minimum size, and open
+  // the conversation with the cold-start icebreaker (Step 22). The icebreaker
+  // runs AFTER the response so the join never waits on a Gloo call — the
+  // thread's 10-second poll delivers it — and its per-circle idempotency fence
+  // means a re-activation (dev: remove and re-add a member) posts nothing more.
   if (circle.state === "forming" && count + 1 >= MIN_MEMBERS) {
     await db
       .update(circles)
       .set({ state: "active" })
       .where(eq(circles.id, circle.id));
+    after(() => postIcebreaker(circle.id));
   }
 
   return NextResponse.json({ ok: true, circleId: circle.id });

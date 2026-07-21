@@ -343,6 +343,14 @@ export const circles = pgTable("circles", {
   createdBy: text("created_by")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  // Cold-start icebreaker fence (Step 22). Null until the circle reaches two
+  // members and flips to `active`, when it is claimed atomically (set from null
+  // in one UPDATE … WHERE icebreaker_at IS NULL) BEFORE the Gloo call — the
+  // "idempotency key on circle" that makes the icebreaker fire exactly once.
+  // A successful post leaves it set forever, so removing and re-adding a member
+  // (dev) never yields a second icebreaker; a failed generation resets it to
+  // null so a later join can retry. Records when Round opened the conversation.
+  icebreakerAt: timestamp("icebreaker_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -411,9 +419,10 @@ export const messages = pgTable(
     // Message-type groundwork (Step 19). "message" is an ordinary member post;
     // "reflection" is a day-tagged reflection that passed the Escalation gate
     // (Step 19); "starters" is Round's system-attributed conversation-starter
-    // card (Step 20, authorId null). Kept as free text with a default so the
-    // remaining system kinds (icebreaker 22, digest 24, summary 25) need no
-    // migration.
+    // card (Step 20, authorId null); "icebreaker" is Round's cold-start opening
+    // message posted when the circle activates (Step 22, authorId null). Kept as
+    // free text with a default so the remaining system kinds (digest 24,
+    // summary 25) need no migration.
     kind: text("kind").notNull().default("message"),
     // Set on reflection posts (kind = "reflection") and starter posts
     // (kind = "starters"): the plan day the post is tied to and the
