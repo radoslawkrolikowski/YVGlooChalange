@@ -1,8 +1,10 @@
 import { and, eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { db } from "@/db";
 import { plans, userPlanProgress } from "@/db/schema";
 import { remintAnonDayComplete } from "@/lib/anon-session";
+import { loadUserCircle } from "@/lib/circles";
+import { postConversationStarters } from "@/lib/post-reading";
 import { resolveSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -89,6 +91,23 @@ export async function POST(request: Request) {
           ),
         );
     }
+
+    // Step 20: finishing a reading gives the circle something to talk about.
+    // Runs AFTER the response so the button never waits on a Gloo call — the
+    // thread's 10-second poll delivers the starters. Idempotent per
+    // user+circle+plan day, so a re-completed day posts nothing a second time.
+    after(async () => {
+      const circle = await loadUserCircle(session.userId);
+      if (!circle || circle.planId !== progress.planId) return;
+      await postConversationStarters({
+        userId: session.userId,
+        circleId: circle.id,
+        dayNumber: day,
+        language: session.language ?? "en",
+        bibleVersionId: session.bibleVersionId,
+      });
+    });
+
     return NextResponse.json({ ok: true });
   }
 

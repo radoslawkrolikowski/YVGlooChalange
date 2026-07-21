@@ -13,6 +13,7 @@ import { db } from "@/db";
 import {
   circleMembers,
   circles,
+  conversationStarters,
   messages,
   planDays,
   plans,
@@ -243,19 +244,23 @@ export async function canAttachPlan(
  * Translations (message_translations) are additive and land in Step 25. */
 export interface ThreadMessage {
   id: string;
-  authorId: string;
-  /** Author display name — the roster shows names only. */
+  /** The member who posted, or null on Round's system posts (Step 20). */
+  authorId: string | null;
+  /** Author display name — the roster shows names only. "Round" on system. */
   authorName: string;
   /** The author's original, immutable words. */
   body: string;
   /** ISO 639-1 language of the original, or null when unknown. */
   sourceLanguage: string | null;
-  /** "message" (ordinary post) or "reflection" (day-tagged, Step 19). */
-  kind: "message" | "reflection";
-  /** The plan day a reflection responds to; null on ordinary messages. */
+  /** "message" (ordinary post), "reflection" (day-tagged, Step 19), or
+   * "starters" (Round's conversation-starter card, Step 20). */
+  kind: "message" | "reflection" | "starters";
+  /** The plan day a reflection or starter set responds to; null otherwise. */
   dayNumber: number | null;
-  /** Human-readable passage label for a reflection card; null otherwise. */
+  /** Human-readable passage label for a reflection/starters card; else null. */
   dayLabel: string | null;
+  /** The individually replyable questions on a "starters" post; else null. */
+  questions: string[] | null;
   /** ISO timestamp — the client formats the relative label and date separators. */
   createdAt: string;
 }
@@ -296,7 +301,19 @@ export async function loadThreadCircle(
   return { ...circle, state: circle.state as CircleState };
 }
 
-/** A circle's messages, oldest first — original bodies with author names. */
+/** Thread message kinds, narrowed from the free-text column. */
+function threadKind(kind: string): ThreadMessage["kind"] {
+  if (kind === "reflection") return "reflection";
+  if (kind === "starters") return "starters";
+  return "message";
+}
+
+/**
+ * A circle's messages, oldest first — original bodies with author names.
+ * The author join is a LEFT join: Round's system posts (Step 20 starters, and
+ * later the icebreaker/digest/summary) have no author row, and they carry
+ * their replyable question list from conversation_starters.
+ */
 export async function loadThreadMessages(
   circleId: string,
 ): Promise<ThreadMessage[]> {
@@ -310,24 +327,38 @@ export async function loadThreadMessages(
       kind: messages.kind,
       dayNumber: messages.dayNumber,
       dayLabel: messages.dayLabel,
+      questions: conversationStarters.questions,
       createdAt: messages.createdAt,
     })
     .from(messages)
-    .innerJoin(users, eq(users.id, messages.authorId))
+    .leftJoin(users, eq(users.id, messages.authorId))
+    .leftJoin(
+      conversationStarters,
+      eq(conversationStarters.messageId, messages.id),
+    )
     .where(eq(messages.circleId, circleId))
     .orderBy(asc(messages.createdAt));
 
-  return rows.map((row) => ({
-    id: row.id,
-    authorId: row.authorId,
-    authorName: row.authorName ?? "Reader",
-    body: row.body,
-    sourceLanguage: row.sourceLanguage,
-    kind: row.kind === "reflection" ? "reflection" : "message",
-    dayNumber: row.dayNumber,
-    dayLabel: row.dayLabel,
-    createdAt: row.createdAt.toISOString(),
-  }));
+  return rows.map((row) => {
+    const kind = threadKind(row.kind);
+    return {
+      id: row.id,
+      authorId: row.authorId,
+      // Round is the author of every system post — never a member's name.
+      authorName: row.authorId === null ? "Round" : (row.authorName ?? "Reader"),
+      body: row.body,
+      sourceLanguage: row.sourceLanguage,
+      kind,
+      dayNumber: row.dayNumber,
+      dayLabel: row.dayLabel,
+      questions:
+        kind === "starters"
+          ? // Fall back to the body's lines if the starters row ever vanishes.
+            (row.questions?.length ? row.questions : row.body.split("\n"))
+          : null,
+      createdAt: row.createdAt.toISOString(),
+    };
+  });
 }
 
 /** A circle's plan day, resolved for priming the reflection composer. */
