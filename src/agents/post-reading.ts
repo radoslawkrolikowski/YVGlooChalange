@@ -49,27 +49,40 @@ const SYSTEM_PROMPT =
   "Write the questions directly in the requested language. " +
   "Respond with JSON only — no prose, no markdown fences.";
 
+/**
+ * Absent context is OMITTED, never sent as a "none" placeholder.
+ *
+ * Two reasons, one of them load-bearing. Prompt hygiene: a line saying a
+ * reader highlighted nothing is filler that dilutes the real context. And
+ * Gloo's content guardrail scores the whole payload — the empty-context
+ * placeholder lines were part of a combination that got benign passages
+ * (John 13:12-17 reproducibly) refused as "sexually explicit". Sending no line
+ * at all removes the surface entirely, where a different placeholder ("N/A",
+ * "[]") would just be another string for the classifier to score. See
+ * GlooGuardrailError in src/lib/gloo.ts.
+ */
 function buildUserMessage(input: PostReadingInput): string {
-  return [
-    `Passage (${input.passageReference}):`,
-    input.passageText,
-    "",
-    `Phrases this reader highlighted while reading: ${
-      input.sessionHighlights && input.sessionHighlights.length > 0
-        ? input.sessionHighlights.join(" | ")
-        : "none"
-    }`,
-    `Pre-reading prompts this reader was shown: ${
-      input.preReadingPrompts && input.preReadingPrompts.length > 0
-        ? input.preReadingPrompts.join(" | ")
-        : "none"
-    }`,
+  const lines = [`Passage (${input.passageReference}):`, input.passageText, ""];
+
+  if (input.sessionHighlights && input.sessionHighlights.length > 0) {
+    lines.push(
+      `Phrases this reader highlighted while reading: ${input.sessionHighlights.join(" | ")}`,
+    );
+  }
+  if (input.preReadingPrompts && input.preReadingPrompts.length > 0) {
+    lines.push(
+      `Pre-reading prompts this reader was shown: ${input.preReadingPrompts.join(" | ")}`,
+    );
+  }
+
+  lines.push(
     `Write the questions in this language (ISO 639-1): ${input.language}`,
     "",
     "Respond with exactly this JSON shape:",
     '{"questions": ["<question 1>", "<question 2>", "<question 3>"]}',
-    "Give 2 or 3 questions — no more, no fewer.",
-  ].join("\n");
+    "Give exactly 2 or 3 questions.",
+  );
+  return lines.join("\n");
 }
 
 /** Parse the model's JSON, tolerating markdown fences it was told to skip. */

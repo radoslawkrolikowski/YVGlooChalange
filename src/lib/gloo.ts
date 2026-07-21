@@ -38,6 +38,29 @@ export class GlooApiError extends Error {
   }
 }
 
+/**
+ * Gloo's content guardrail refused the request before any model saw it.
+ *
+ * The response is a 200 in the normal completion shape, but it carries a
+ * canned refusal as the content and NO routing metadata: `model` comes back
+ * empty and the Gloo-only fields (provider, model_family, routing_mechanism,
+ * trace_id) are absent — the tell that no model was routed to. Without this
+ * detection a refusal reads as a perfectly good completion and lands in
+ * agent_logs as "ok".
+ *
+ * It is not transient: retrying the same text is refused identically every
+ * time (verified), so callers must change the request or give up rather than
+ * spend another call. The guardrail is also demonstrably over-eager on benign
+ * devotional input — the phrasing of an instruction, not its subject, can be
+ * enough to trip it — so an agent seeing this has done nothing wrong.
+ */
+export class GlooGuardrailError extends Error {
+  constructor(public readonly refusal: string) {
+    super(`Gloo guardrail refused the request: ${refusal.slice(0, 200)}`);
+    this.name = "GlooGuardrailError";
+  }
+}
+
 export interface GlooMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -179,6 +202,11 @@ async function requestCompletion(
     );
   }
 
+  // A guardrail refusal: 200 and well-formed, but no model was routed to.
+  if (!completion.model) {
+    throw new GlooGuardrailError(content);
+  }
+
   return {
     content,
     model: completion.model,
@@ -233,10 +261,13 @@ export async function chatCompletion(
     }
   }
 
+  // A guardrail block is logged as its own status, never as "ok" (it is not a
+  // completion) and never as "error" (nothing failed) — the audit trail should
+  // show plainly how often Gloo refuses, and on what.
   await writeAgentLog({
     agentName: options.agentName,
     model: options.model ?? null,
-    status: "error",
+    status: lastError instanceof GlooGuardrailError ? "blocked" : "error",
     error:
       lastError instanceof Error ? lastError.message : String(lastError),
     latencyMs: Date.now() - startedAt,

@@ -28,6 +28,19 @@ export const summary = shellAgent<SummaryInput>({
     circleThemes: ["rest", "trust"],
     language: "en",
   },
+  // Absent context is omitted, never sent as a "none yet" placeholder — see
+  // the note in src/agents/post-reading.ts (prompt hygiene, and Gloo's
+  // whole-payload content guardrail).
   buildUserMessage: (input) =>
-    `Passage (${input.passageReference}):\n${input.passageText}\n\nThemes the circle raised: ${input.circleThemes?.join(", ") || "none yet"}\nLanguage: ${input.language}\n\nWrite the lesson summary.`,
+    [
+      `Passage (${input.passageReference}):`,
+      input.passageText,
+      "",
+      ...(input.circleThemes && input.circleThemes.length > 0
+        ? [`Themes the circle raised: ${input.circleThemes.join(", ")}`]
+        : []),
+      `Language: ${input.language}`,
+      "",
+      "Write the lesson summary.",
+    ].join("\n"),
 });
