@@ -40,23 +40,29 @@ const SYSTEM_PROMPT =
   "Write the prompts directly in the user's language. " +
   "Respond with JSON only — no prose, no markdown fences.";
 
+/** Absent context is OMITTED, never sent as a "none"/"not stated" placeholder
+ * — see the same note in src/agents/post-reading.ts for why (prompt hygiene,
+ * and Gloo's whole-payload content guardrail). */
 function buildUserMessage(input: PreReadingInput): string {
-  return [
-    `Passage (${input.passageReference}):`,
-    input.passageText,
-    "",
-    `The user's goals: ${input.goals?.trim() || "not stated"}`,
-    `Phrases the user has highlighted before: ${
-      input.highlights && input.highlights.length > 0
-        ? input.highlights.join(" | ")
-        : "none"
-    }`,
+  const lines = [`Passage (${input.passageReference}):`, input.passageText, ""];
+
+  if (input.goals?.trim()) {
+    lines.push(`The user's goals: ${input.goals.trim()}`);
+  }
+  if (input.highlights && input.highlights.length > 0) {
+    lines.push(
+      `Phrases the user has highlighted before: ${input.highlights.join(" | ")}`,
+    );
+  }
+
+  lines.push(
     `Write the prompts in this language (ISO 639-1): ${input.language}`,
     "",
     "Respond with exactly this JSON shape:",
     '{"prompts": ["<prompt 1>", "<prompt 2>", "<prompt 3>"]}',
-    "Give 2 or 3 prompts — no more, no fewer.",
-  ].join("\n");
+    "Give exactly 2 or 3 prompts.",
+  );
+  return lines.join("\n");
 }
 
 /** Parse the model's JSON, tolerating markdown fences it was told to skip. */

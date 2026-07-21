@@ -47,10 +47,13 @@ export function PlanScreen({
         <SectionLabel icon={<CalendarDays size={14} aria-hidden />}>
           {plan.lengthDays} days
         </SectionLabel>
+        {/* Every day opens its own passage — completed days included, so a
+            reader can always return to something they have already read. */}
         <PlanDayList
           days={days}
           currentDay={currentDay}
           completedDays={completedDays}
+          href={(day) => `/read?ref=${encodeURIComponent(day.reference)}`}
         />
       </Card>
 

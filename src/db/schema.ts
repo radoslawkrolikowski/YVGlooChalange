@@ -397,23 +397,28 @@ export const messages = pgTable(
     circleId: text("circle_id")
       .notNull()
       .references(() => circles.id, { onDelete: "cascade" }),
-    /** The member who posted — Path A only in Step 17 (no anon circle rows). */
-    authorId: text("author_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    /** The member who posted — Path A only in Step 17 (no anon circle rows).
+     * NULL on system-attributed posts (Step 20): starters, and later the
+     * icebreaker (22), digest (24), and summary (25) are authored by "Round",
+     * not by any member, so they have no users row to point at. */
+    authorId: text("author_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
     /** The author's original words, immutable — never overwritten. */
     body: text("body").notNull(),
     /** ISO 639-1 code of the original's language; null when unknown. */
     sourceLanguage: text("source_language"),
     // Message-type groundwork (Step 19). "message" is an ordinary member post;
     // "reflection" is a day-tagged reflection that passed the Escalation gate
-    // (Step 19). Kept as free text with a default so future kinds (Step 20's
-    // system-attributed "Round" posts, digests, starters) need no migration —
-    // Step 20 depends on this column existing.
+    // (Step 19); "starters" is Round's system-attributed conversation-starter
+    // card (Step 20, authorId null). Kept as free text with a default so the
+    // remaining system kinds (icebreaker 22, digest 24, summary 25) need no
+    // migration.
     kind: text("kind").notNull().default("message"),
-    // Set only on reflection posts (kind = "reflection"): the plan day the
-    // reflection is tied to and the human-readable passage label the thread
-    // card shows ("Psalm 23"). Null on ordinary messages.
+    // Set on reflection posts (kind = "reflection") and starter posts
+    // (kind = "starters"): the plan day the post is tied to and the
+    // human-readable passage label the thread card shows ("Psalm 23"). Null on
+    // ordinary messages.
     dayNumber: integer("day_number"),
     dayLabel: text("day_label"),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -502,6 +507,73 @@ export const reflections = pgTable(
   (table) => [
     // The Facilitator (Step 24) reads a circle's reflections for one plan day.
     index("reflections_circle_day_idx").on(table.circleId, table.dayNumber),
+  ],
+);
+
+// --- Conversation starters (Step 20) --------------------------------------
+//
+// The PostReading agent's output: 2–3 discussion questions generated when a
+// member finishes a day's reading, grounded in that passage, the highlights
+// they made during the session, and the pre-reading prompts they were shown.
+// Posted to the circle thread as a system message attributed to "Round"
+// (messages.kind = "starters", authorId null) — the questions themselves live
+// here as an array so the thread can render each one as an individually
+// replyable line rather than a wall of text.
+//
+// The unique index IS the idempotency fence: ONE card per circle per PLAN day.
+// The row is claimed with an empty `questions` array BEFORE the Gloo call, so
+// the second, third and fourth member to finish the same day all hit the
+// conflict and exit without calling Gloo — the thread gets one starter card,
+// not one per reader. A failed generation deletes its own claim row so the next
+// member to finish can retry. This is the same discipline Step 23's
+// `agent_runs` table generalises; the output-table constraint here is the
+// second fence that plan step describes, landing early because starters ship
+// before the scheduling backbone.
+//
+// `userId` is kept as *who triggered it* — the first member to finish that day,
+// whose session highlights and pre-reading prompts ground the questions. It is
+// attribution and debugging context, never shown in the thread, and no longer
+// part of the key.
+export const conversationStarters = pgTable(
+  "conversation_starters",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    circleId: text("circle_id")
+      .notNull()
+      .references(() => circles.id, { onDelete: "cascade" }),
+    /** The first member to finish this day — their highlights and prompts
+     * ground the questions. Attribution only; never shown in the thread and
+     * not part of the idempotency key. */
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 1-based plan day the reading belongs to — part of the idempotency key. */
+    dayNumber: integer("day_number").notNull(),
+    /** USFM reference of that day, e.g. "PSA.23". */
+    reference: text("reference").notNull(),
+    /** Human-readable label of that day, e.g. "Psalm 23". */
+    label: text("label").notNull(),
+    /** The 2–3 generated questions. Empty while the row is only a claim. */
+    questions: text("questions").array().notNull().default([]),
+    /** Language they were generated in — Round writes directly, never after. */
+    language: text("language").notNull(),
+    /** Model that served the generation, as reported by Gloo. */
+    model: text("model"),
+    /** The thread message they were posted as; null until the post lands. */
+    messageId: text("message_id").references(() => messages.id, {
+      onDelete: "cascade",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("conversation_starters_circle_day_idx").on(
+      table.circleId,
+      table.dayNumber,
+    ),
   ],
 );
 

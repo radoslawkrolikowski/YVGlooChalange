@@ -1,8 +1,9 @@
 "use client";
 
+import { CornerDownRight, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Avatar, Banner, SupportCard } from "@/components/ui";
+import { Avatar, Banner, RoundAvatar, SupportCard } from "@/components/ui";
 import type { CirclePlanDay, ThreadCircle, ThreadMessage } from "@/lib/circles";
 import type { CrisisResource } from "@/config/crisis-resources";
 
@@ -22,6 +23,13 @@ import type { CrisisResource } from "@/config/crisis-resources";
  * posts as a distinct day-tagged reflection card and the composer reverts to
  * chat, while a flagged one is never posted — the author privately sees the
  * quiet SupportCard instead, and other members' threads show no trace of it.
+ *
+ * Step 20 adds Round's system-message identity, defined here and reused by the
+ * icebreaker (22), digest (24), and summary (25): a sage-tinted full-width card
+ * with the Round mark in place of a member avatar and "Round" as the author, so
+ * it can never be mistaken for a member's message. Its first use is the
+ * conversation-starter card, whose questions each carry a Reply action that
+ * primes the composer with that question as visible context.
  */
 
 const POLL_INTERVAL_MS = 10_000;
@@ -33,12 +41,15 @@ export function CircleThread({
   currentUserId,
   initialMessages,
   reflectionDay,
+  alreadyReflected = false,
 }: {
   circle: ThreadCircle;
   currentUserId: string;
   initialMessages: ThreadMessage[];
   /** Set when arriving from "Finished reading" — primes reflection mode. */
   reflectionDay: CirclePlanDay | null;
+  /** This member already reflected on that day — allowed, but said out loud. */
+  alreadyReflected?: boolean;
 }) {
   const [messages, setMessages] = useState<ThreadMessage[]>(initialMessages);
   const [draft, setDraft] = useState("");
@@ -51,7 +62,12 @@ export function CircleThread({
   const [supportResources, setSupportResources] = useState<
     CrisisResource[] | null
   >(null);
+  // The starter question the member tapped "Reply" on (Step 20). Composer-side
+  // context only: it is shown while typing and cleared on send — the posted
+  // message is an ordinary message and the author's words are untouched.
+  const [replyTo, setReplyTo] = useState<string | null>(null);
 
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const lastMessageIdRef = useRef<string | undefined>(
     initialMessages.at(-1)?.id,
@@ -123,6 +139,7 @@ export function CircleThread({
         const result = await response.json();
         if (result.ok) {
           setDraft("");
+          setReplyTo(null);
           setMessages(result.messages as ThreadMessage[]);
         } else {
           setError(result.error ?? "Your message could not be sent.");
@@ -174,6 +191,14 @@ export function CircleThread({
 
   const inReflectionMode = mode === "reflection" && reflectionDay !== null;
 
+  /** Reply to one of Round's starter questions: leave reflection mode, show
+   * the question above the composer, and put the cursor in the box. */
+  function replyToQuestion(question: string) {
+    setMode("message");
+    setReplyTo(question);
+    composerRef.current?.focus();
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* Header: back to the circles list + the serif circle name. */}
@@ -201,20 +226,28 @@ export function CircleThread({
       {messages.length === 0 ? (
         <EmptyThread state={circle.state} />
       ) : (
-        <MessageList messages={messages} currentUserId={currentUserId} />
+        <MessageList
+          messages={messages}
+          currentUserId={currentUserId}
+          onReplyToQuestion={replyToQuestion}
+        />
       )}
 
       <div ref={endRef} />
 
       <Composer
+        textareaRef={composerRef}
         draft={draft}
         sending={sending}
         reflectionMode={inReflectionMode}
         reflectionDay={reflectionDay}
+        alreadyReflected={alreadyReflected}
+        replyTo={replyTo}
         onChange={setDraft}
         onKeyDown={onComposerKeyDown}
         onSend={() => void send()}
         onSwitchToMessage={() => setMode("message")}
+        onClearReply={() => setReplyTo(null)}
       />
     </div>
   );
@@ -241,9 +274,11 @@ function EmptyThread({ state }: { state: ThreadCircle["state"] }) {
 function MessageList({
   messages,
   currentUserId,
+  onReplyToQuestion,
 }: {
   messages: ThreadMessage[];
   currentUserId: string;
+  onReplyToQuestion: (question: string) => void;
 }) {
   let lastDayKey: string | null = null;
 
@@ -256,7 +291,9 @@ function MessageList({
         return (
           <div key={message.id} className="flex flex-col gap-3">
             {showSeparator && <DateSeparator iso={message.createdAt} />}
-            {message.kind === "reflection" ? (
+            {message.kind === "starters" ? (
+              <StartersRow message={message} onReply={onReplyToQuestion} />
+            ) : message.kind === "reflection" ? (
               <ReflectionRow
                 message={message}
                 own={message.authorId === currentUserId}
@@ -373,38 +410,164 @@ function ReflectionRow({
   );
 }
 
+/**
+ * Round's system-message identity (Step 20) — the shared frame every
+ * system-attributed post uses, reused by Steps 22, 24 and 25. Three signals
+ * separate it from a member message at a glance: the Round mark instead of an
+ * initials avatar, "Round" as the author with a small system tag, and a
+ * sage-tinted full-width surface rather than the ivory member bubble.
+ */
+function SystemMessage({
+  createdAt,
+  label,
+  children,
+}: {
+  createdAt: string;
+  /** Small line under the name, e.g. the passage the post responds to. */
+  label?: string | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <RoundAvatar size="sm" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex items-baseline gap-2">
+          <span className="text-sm font-semibold text-ink">Round</span>
+          {/* Names what Round is, so the post can never read as a member.
+              Deliberately not "Facilitator": that is the name of a specific
+              agent (Step 24's digest), and this identity is shared by several. */}
+          <span className="shrink-0 rounded-full bg-sage-soft px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-widest text-primary">
+            Round AI
+          </span>
+          <span
+            suppressHydrationWarning
+            className="shrink-0 text-xs text-ink-faint"
+          >
+            {formatTime(createdAt)}
+          </span>
+        </div>
+        <div className="rounded-lg rounded-tl-sm border border-sage/60 bg-sage-soft/60 px-3.5 py-3">
+          {label && (
+            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-primary">
+              {label}
+            </p>
+          )}
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The conversation-starter card (Step 20): 2–3 questions from Round, each on
+ * its own line with its own Reply action so a member can answer one question
+ * rather than the card as a whole.
+ */
+function StartersRow({
+  message,
+  onReply,
+}: {
+  message: ThreadMessage;
+  onReply: (question: string) => void;
+}) {
+  const questions = message.questions ?? [];
+  return (
+    <SystemMessage
+      createdAt={message.createdAt}
+      label={`Conversation starters${message.dayLabel ? ` · ${message.dayLabel}` : ""}`}
+    >
+      <ol className="flex flex-col gap-2.5">
+        {questions.map((question, index) => (
+          <li
+            key={question}
+            className="flex flex-col gap-1.5 border-t border-sage/40 pt-2.5 first:border-t-0 first:pt-0"
+          >
+            <p className="flex gap-2 font-serif text-[0.98rem] leading-relaxed text-ink">
+              <span aria-hidden className="shrink-0 font-semibold text-primary">
+                {index + 1}.
+              </span>
+              <span className="break-words">{question}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => onReply(question)}
+              className="inline-flex w-fit items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-semibold text-primary transition-colors hover:bg-sage-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              <CornerDownRight size={13} aria-hidden />
+              Reply to this
+            </button>
+          </li>
+        ))}
+      </ol>
+    </SystemMessage>
+  );
+}
+
 /** The composer, pinned above the mobile bottom nav / at the column bottom.
  * In reflection mode (Step 19) it shows the day's reference above the box and a
  * reflection prompt, and offers a quiet way back to ordinary chat. */
 function Composer({
+  textareaRef,
   draft,
   sending,
   reflectionMode,
   reflectionDay,
+  alreadyReflected,
+  replyTo,
   onChange,
   onKeyDown,
   onSend,
   onSwitchToMessage,
+  onClearReply,
 }: {
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   draft: string;
   sending: boolean;
   reflectionMode: boolean;
   reflectionDay: CirclePlanDay | null;
+  alreadyReflected: boolean;
+  /** Round's starter question being answered, shown while typing (Step 20). */
+  replyTo: string | null;
   onChange: (value: string) => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSend: () => void;
   onSwitchToMessage: () => void;
+  onClearReply: () => void;
 }) {
   const empty = draft.trim().length === 0;
   return (
     <div className="sticky bottom-0 z-20 -mx-4 border-t border-line bg-surface/95 px-4 pt-3 backdrop-blur pb-[calc(env(safe-area-inset-bottom)+4.75rem)] md:pb-4">
+      {replyTo && !reflectionMode && (
+        <div className="mb-2 flex items-start gap-2 rounded-lg border border-sage/60 bg-sage-soft/60 px-3 py-2">
+          <CornerDownRight
+            size={14}
+            aria-hidden
+            className="mt-0.5 shrink-0 text-primary"
+          />
+          <p className="min-w-0 flex-1 text-sm text-ink-soft">
+            <span className="font-semibold text-ink">Replying to Round: </span>
+            {replyTo}
+          </p>
+          <button
+            type="button"
+            onClick={onClearReply}
+            aria-label="Stop replying to this question"
+            className="shrink-0 rounded-full p-1 text-ink-faint transition-colors hover:bg-sage-soft hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            <X size={14} aria-hidden />
+          </button>
+        </div>
+      )}
       {reflectionMode && reflectionDay && (
         <div className="mb-2 flex items-center justify-between gap-3">
           <p className="min-w-0 text-sm text-ink-soft">
             <span className="font-semibold text-ink">
               Reflecting on {reflectionDay.label}
             </span>{" "}
-            — share what today&rsquo;s passage stirred in you.
+            {alreadyReflected
+              ? "— you've already shared one on this passage; this adds another."
+              : "— share what today's passage stirred in you."}
           </p>
           <button
             type="button"
@@ -417,14 +580,17 @@ function Composer({
       )}
       <div className="flex items-end gap-2">
         <textarea
+          ref={textareaRef}
           value={draft}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={onKeyDown}
-          rows={reflectionMode ? 3 : 1}
+          rows={reflectionMode || replyTo ? 3 : 1}
           placeholder={
             reflectionMode
               ? "Share your reflection on today's passage…"
-              : "Write a message…"
+              : replyTo
+                ? "Answer Round's question…"
+                : "Write a message…"
           }
           aria-label={reflectionMode ? "Write your reflection" : "Write a message"}
           className="max-h-40 min-h-[2.75rem] flex-1 resize-none rounded-lg border border-line bg-surface px-3 py-2.5 text-base text-ink placeholder:text-ink-faint focus:outline-2 focus:outline-offset-1 focus:outline-primary"
