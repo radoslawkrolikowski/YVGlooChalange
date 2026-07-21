@@ -15,6 +15,7 @@ export type AgentName =
   | "plan-builder"
   | "pre-reading"
   | "post-reading"
+  | "matching"
   | "facilitator"
   | "summary"
   | "prayer"

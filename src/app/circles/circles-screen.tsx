@@ -15,6 +15,10 @@ import {
 import type { CircleBrowseItem, UserCircle } from "@/lib/circles";
 import { CircleBrowseCard } from "./circle-browse-card";
 import { CreateCircle } from "./create-circle";
+import {
+  PlanSwitchDialog,
+  type PlanSwitchPrompt,
+} from "./plan-switch-dialog";
 
 /*
  * The /circles tab (Step 16), composed in the 8C register: "CIRCLES" icon-chip
@@ -35,11 +39,9 @@ export function CirclesScreen({
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [switchPrompt, setSwitchPrompt] = useState<{
-    circleId: string;
-    circleName: string;
-    planName: string;
-  } | null>(null);
+  const [switchPrompt, setSwitchPrompt] = useState<PlanSwitchPrompt | null>(
+    null,
+  );
 
   async function refresh() {
     const response = await fetch("/api/circles");
@@ -98,7 +100,8 @@ export function CirclesScreen({
       {/* Hero: the user's own circle, once joined. */}
       {circle && <CircleHero circle={circle} />}
 
-      {/* Create flow — offered only when the user is not already in a circle. */}
+      {/* The three ways in (Step 21 adds matching): let Round match you — the
+          screen's one primary action — start your own, or browse below. */}
       {!inACircle &&
         (creating ? (
           <CreateCircle
@@ -109,9 +112,17 @@ export function CirclesScreen({
             onCancel={() => setCreating(false)}
           />
         ) : (
-          <Button full onClick={() => setCreating(true)}>
-            Start a circle
-          </Button>
+          <div className="flex flex-col gap-2.5">
+            <ButtonLink href="/circles/match" full>
+              Find my circle
+            </ButtonLink>
+            <p className="px-1 text-center text-sm text-ink-faint">
+              Round reads your goals and suggests the circle that fits you best.
+            </p>
+            <Button variant="secondary" full onClick={() => setCreating(true)}>
+              Start a circle
+            </Button>
+          </div>
         ))}
 
       {/* Browse: open circles. */}
@@ -193,53 +204,5 @@ function CircleHero({ circle }: { circle: UserCircle }) {
         Open Circle
       </ButtonLink>
     </Card>
-  );
-}
-
-/** Explicit "switch your reading?" confirmation before an aligning join. */
-function PlanSwitchDialog({
-  prompt,
-  busy,
-  onConfirm,
-  onCancel,
-}: {
-  prompt: { circleName: string; planName: string };
-  busy: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
-      <button
-        type="button"
-        aria-label="Cancel"
-        onClick={onCancel}
-        className="absolute inset-0 animate-sheet-fade bg-ink/40"
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Switch your reading?"
-        className="relative flex w-full max-w-lg animate-sheet-up flex-col gap-4 rounded-t-xl bg-surface px-4 py-5 shadow-card"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
-        <h2 className="font-serif text-lg font-semibold tracking-tight text-ink">
-          Switch your reading?
-        </h2>
-        <p className="text-sm text-ink-soft">
-          {prompt.circleName} reads {prompt.planName}. Joining makes it your
-          active plan; your current plan pauses and keeps its progress — you can
-          resume it any time from My Plan.
-        </p>
-        <div className="flex gap-3">
-          <Button full onClick={onConfirm} disabled={busy}>
-            {busy ? "Joining…" : `Switch and join`}
-          </Button>
-          <Button variant="ghost" onClick={onCancel} disabled={busy}>
-            Cancel
-          </Button>
-        </div>
-      </div>
-    </div>
   );
 }
