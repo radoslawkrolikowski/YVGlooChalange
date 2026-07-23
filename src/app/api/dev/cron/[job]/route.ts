@@ -11,6 +11,7 @@ import { GET as dailyGET } from "@/app/api/cron/daily/route";
 import { GET as facilitatorGET } from "@/app/api/cron/facilitator/route";
 import { GET as reminderGET } from "@/app/api/cron/reminder/route";
 import { GET as healthGET } from "@/app/api/cron/health/route";
+import { GET as companionGET } from "@/app/api/cron/companion/route";
 import { GET as demoRefreshGET } from "@/app/api/cron/demo-refresh/route";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ const handlers: Record<string, (request: Request) => Promise<Response>> = {
   facilitator: facilitatorGET,
   reminder: reminderGET,
   health: healthGET,
+  companion: companionGET,
   "demo-refresh": demoRefreshGET,
 };
 

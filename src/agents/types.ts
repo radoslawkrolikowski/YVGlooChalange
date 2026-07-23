@@ -18,6 +18,7 @@ export type AgentName =
   | "matching"
   | "facilitator"
   | "summary"
+  | "companion"
   | "prayer"
   | "reminder"
   | "escalation"

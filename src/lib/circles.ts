@@ -255,9 +255,15 @@ export interface ThreadMessage {
   sourceLanguage: string | null;
   /** "message" (ordinary post), "reflection" (day-tagged, Step 19),
    * "starters" (Round's conversation-starter card, Step 20), "icebreaker"
-   * (Round's cold-start opening message, Step 22), or "digest" (Round's daily
-   * digest card, Step 24). */
-  kind: "message" | "reflection" | "starters" | "icebreaker" | "digest";
+   * (Round's cold-start opening message, Step 22), "digest" (Round's daily
+   * digest card, Step 24), or "companion" (Round's stalled-day nudge, Step 24A). */
+  kind:
+    | "message"
+    | "reflection"
+    | "starters"
+    | "icebreaker"
+    | "digest"
+    | "companion";
   /** The plan day a reflection/starters/digest responds to; null otherwise. */
   dayNumber: number | null;
   /** Human-readable passage label for a reflection/starters/digest; else null. */
@@ -328,6 +334,7 @@ function threadKind(kind: string): ThreadMessage["kind"] {
   if (kind === "starters") return "starters";
   if (kind === "icebreaker") return "icebreaker";
   if (kind === "digest") return "digest";
+  if (kind === "companion") return "companion";
   return "message";
 }
 

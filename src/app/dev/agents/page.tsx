@@ -48,8 +48,16 @@ const cronJobs: {
     displayName: "Health sweep",
     description:
       "12-hourly per active circle by design (am/pm period keys); the Hobby plan fires the am half once a day. Stub until Step 34.",
-    schedule: "daily 06:00 UTC",
+    schedule: "12-hourly 06:00 UTC",
     names: ["health"],
+  },
+  {
+    job: "companion",
+    displayName: "Companion sweep",
+    description:
+      "12-hourly per active circle (am/pm period keys). Revives a stalled day: reads the day's thread and posts one short 'Round' turn — unless a digest owns the day, enough members reflected, the circle is actively chatting, or a crisis signal is present. Rides the 12-hourly slot with Health.",
+    schedule: "12-hourly · via health slot",
+    names: ["companion"],
   },
   {
     job: "demo-refresh",
