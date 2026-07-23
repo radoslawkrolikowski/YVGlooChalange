@@ -50,14 +50,19 @@ function SweepBlock({ sweep }: { sweep: SweepResult }) {
           {sweep.targets.map((target) => (
             <li
               key={target.targetId}
-              className="flex items-center justify-between gap-2 text-xs"
+              className="flex flex-col gap-0.5 text-xs"
             >
-              <span className="truncate font-mono text-ink-soft">
-                {target.targetId}
-              </span>
-              <Badge status={target.status === "ran" ? "active" : "neutral"}>
-                {target.status === "ran" ? "ran" : "already ran"}
-              </Badge>
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate font-mono text-ink-soft">
+                  {target.targetId}
+                </span>
+                <Badge status={target.status === "ran" ? "active" : "neutral"}>
+                  {target.status === "ran" ? "ran" : "already ran"}
+                </Badge>
+              </div>
+              {target.detail && (
+                <span className="text-ink-faint">{target.detail}</span>
+              )}
             </li>
           ))}
         </ul>

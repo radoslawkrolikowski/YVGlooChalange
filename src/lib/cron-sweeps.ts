@@ -9,14 +9,18 @@
 // so in this step a sweep's only write is the claim row, which is exactly
 // what makes the idempotency provable in isolation.
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { agentRuns, circles, userPlanProgress } from "@/db/schema";
 import { dailyPeriodKey, halfDayPeriodKey } from "@/lib/cron";
+import { runCircleDigest } from "@/lib/digest";
 
 export interface SweepTarget {
   targetId: string;
   status: "ran" | "already_ran";
+  /** What the run actually did for this target — e.g. "digest posted for
+   * Psalm 23", "below threshold (1/3, need 2)". Shown inline in the console. */
+  detail?: string;
 }
 
 export interface SweepResult {
@@ -77,10 +81,16 @@ function summarise(
 }
 
 /**
- * Daily Facilitator+Summary sweep, per circle. Eligible: active circles —
- * a digest needs at least two members, and only active circles have them.
- * Step 24 adds the real work (reflection threshold, Gloo digest, thread post)
- * behind each successful claim.
+ * Daily Facilitator sweep, per circle. Eligible: active circles — a digest
+ * needs at least two members, and only active circles have them.
+ *
+ * Per circle, claim the agent_runs row (the first idempotency fence); on a
+ * successful claim run the digest (Step 24) — resolve the current plan day,
+ * count distinct reflection authors against the threshold, and, if met, generate
+ * and post the digest. A conflicting claim reports "already_ran" and does
+ * nothing. A generation error releases the claim so a later sweep retries; the
+ * digests (circle, day) unique index is the second fence that keeps a retry from
+ * ever duplicating. (The Summary agent, Step 25, will run in this same claim.)
  */
 export async function facilitatorSweep(): Promise<SweepResult> {
   const periodKey = dailyPeriodKey();
@@ -88,17 +98,39 @@ export async function facilitatorSweep(): Promise<SweepResult> {
     .select({ id: circles.id })
     .from(circles)
     .where(eq(circles.state, "active"));
-  const targets = await claimAll(
-    "facilitator",
-    periodKey,
-    eligible.map((circle) => circle.id),
-  );
-  return summarise(
-    "facilitator",
-    periodKey,
-    targets,
-    "Claims only in Step 23 — digest generation lands in Step 24.",
-  );
+
+  const targets: SweepTarget[] = [];
+  for (const circle of eligible) {
+    const [claim] = await db
+      .insert(agentRuns)
+      .values({ agentName: "facilitator", targetId: circle.id, periodKey })
+      .onConflictDoNothing()
+      .returning({ id: agentRuns.id });
+    if (!claim) {
+      targets.push({ targetId: circle.id, status: "already_ran" });
+      continue;
+    }
+
+    const outcome = await runCircleDigest(circle.id);
+    if (!outcome.posted && outcome.reason === "error") {
+      // Release the claim so a later sweep can retry this circle's digest.
+      await db
+        .delete(agentRuns)
+        .where(
+          and(
+            eq(agentRuns.agentName, "facilitator"),
+            eq(agentRuns.targetId, circle.id),
+            eq(agentRuns.periodKey, periodKey),
+          ),
+        )
+        .catch(() => {
+          // Keep the claim if the release fails — no digest, but no crash.
+        });
+    }
+    targets.push({ targetId: circle.id, status: "ran", detail: outcome.detail });
+  }
+
+  return summarise("facilitator", periodKey, targets);
 }
 
 /**

@@ -586,6 +586,67 @@ export const conversationStarters = pgTable(
   ],
 );
 
+// --- Daily digest (Step 24) -----------------------------------------------
+//
+// The Facilitator agent's output: one digest per circle per plan day, produced
+// on the daily sweep when at least 50% of a circle's members (minimum 2),
+// counted as DISTINCT AUTHORS, have submitted unflagged reflections for the
+// circle's current plan day. Posted to the thread as a system message
+// attributed to "Round" (messages.kind = "digest", authorId null) — the
+// structured parts (synthesis, overlap callout, discussion question) live here
+// so the thread can render the callout with the named members' avatar chips and
+// set the question apart as a quote block.
+//
+// The unique index on (circle, day) IS the second idempotency fence the plan
+// describes ("agent_runs PLUS a unique constraint on the digest itself"): the
+// row is CLAIMED (synthesis/question null) BEFORE the Gloo call, so a re-run —
+// or a later day's sweep still sitting on the same plan day — loses the race
+// and spends no Gloo call. A generation or post failure deletes its own claim
+// so the next sweep can retry. Flagged reflections never reach this table's
+// input (src/lib/digest.ts reads `where flagged = false`).
+export const digests = pgTable(
+  "digests",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    circleId: text("circle_id")
+      .notNull()
+      .references(() => circles.id, { onDelete: "cascade" }),
+    /** 1-based plan day this digest covers — part of the idempotency key. */
+    dayNumber: integer("day_number").notNull(),
+    /** USFM reference of that day, e.g. "PSA.23". */
+    reference: text("reference").notNull(),
+    /** Human-readable label of that day, e.g. "Psalm 23". */
+    label: text("label").notNull(),
+    /** 2–3 sentence collective synthesis. Null while the row is only a claim. */
+    synthesis: text("synthesis"),
+    /** Display names of the members who landed on the shared theme/line —
+     * validated against the day's actual reflection authors before storing, so
+     * the avatar chips can never name a member the model hallucinated. Empty
+     * when no genuine overlap was found. */
+    overlapMembers: text("overlap_members").array().notNull().default([]),
+    /** The shared theme or line the overlap members converged on. */
+    overlapTheme: text("overlap_theme"),
+    /** One discussion question grounded in the passage and the circle's words. */
+    question: text("question"),
+    /** Language it was generated in — Round writes directly, never translated. */
+    language: text("language").notNull(),
+    /** Model that served the generation, as reported by Gloo. */
+    model: text("model"),
+    /** The thread message it was posted as; null until the post lands. */
+    messageId: text("message_id").references(() => messages.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("digests_circle_day_idx").on(table.circleId, table.dayNumber),
+  ],
+);
+
 // --- Escalation audit (Step 18) -------------------------------------------
 //
 // The Escalation Agent's reference-only audit trail (brief §5.11, plan →
