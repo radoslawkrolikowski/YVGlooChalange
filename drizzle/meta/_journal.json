@@ -162,6 +162,13 @@
       "when": 1784830799011,
       "tag": "0022_dazzling_puma",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784831563969,
+      "tag": "0023_step-25-lesson-summary",
+      "breakpoints": true
     }
   ]
 }

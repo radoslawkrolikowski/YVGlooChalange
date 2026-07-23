@@ -1,4 +1,4 @@
-// Daily digest — orchestration (Step 24).
+// Daily digest — orchestration (Step 24; extended in Step 25).
 //
 // Ties the daily Facilitator sweep (Step 23 rail) to the circle thread: for one
 // circle, resolves the current plan day, counts DISTINCT reflection authors
@@ -6,6 +6,13 @@
 // result to the thread as a system message attributed to "Round"
 // (messages.kind = "digest", authorId null — it renders through Step 20's
 // system-message identity).
+//
+// Step 25: alongside the digest, in this same sweep and under the digest's
+// (circle, day) fence, the Summary agent writes a 3–5 sentence plain-language
+// lesson summary of the passage, stored on the same digests row (summary
+// column). Digest and summary are generated together before either is posted,
+// so every digest is accompanied by exactly one summary; a failure of either
+// releases the claim and both regenerate next sweep.
 //
 // "Current plan day" is the LATEST day for which the circle has any unflagged
 // reflection — the day the circle has advanced to. Nothing stores a circle-level
@@ -34,6 +41,7 @@
 
 import { and, asc, desc, eq } from "drizzle-orm";
 import { generateDigest } from "@/agents/facilitator";
+import { generateSummary } from "@/agents/summary";
 import { effectiveVersionId } from "@/config/bible-versions";
 import { db } from "@/db";
 import { circleMembers, digests, messages, reflections, users } from "@/db/schema";
@@ -213,9 +221,10 @@ export async function runCircleDigest(circleId: string): Promise<DigestOutcome> 
       { format: "text" },
     );
 
+    const passageText = passage.content.slice(0, MAX_PASSAGE_CHARS);
     const { digest, model } = await generateDigest({
       passageReference: planDay.reference,
-      passageText: passage.content.slice(0, MAX_PASSAGE_CHARS),
+      passageText,
       reflections: dayReflections.entries,
       language: facts.language,
     });
@@ -229,6 +238,23 @@ export async function runCircleDigest(circleId: string): Promise<DigestOutcome> 
     );
     const overlapMembers = validated.length >= 2 ? validated : [];
     const overlapTheme = overlapMembers.length >= 2 ? digest.overlap.theme : null;
+
+    // The lesson summary (Step 25) runs in this same sweep, under this row's
+    // (circle, day) fence — no separate run key. "Themes the circle raised" are
+    // taken from the digest just generated: its synthesis plus the shared theme
+    // are the freshest distilled articulation of what the circle noticed today.
+    // Generated BEFORE anything is posted so the digest and its summary ship
+    // atomically — a summary failure below releases the claim and both
+    // regenerate on the next sweep, never leaving a digest without a summary.
+    const circleThemes = [digest.synthesis, overlapTheme].filter(
+      (theme): theme is string => Boolean(theme),
+    );
+    const { summary } = await generateSummary({
+      passageReference: planDay.reference,
+      passageText,
+      circleThemes,
+      language: facts.language,
+    });
 
     // The thread post carries a readable rendering of the digest in its body
     // too: it keeps the post meaningful if the digests row is ever unavailable,
@@ -260,6 +286,7 @@ export async function runCircleDigest(circleId: string): Promise<DigestOutcome> 
         overlapMembers,
         overlapTheme,
         question: digest.question,
+        summary,
         model,
         messageId: message.id,
       })
