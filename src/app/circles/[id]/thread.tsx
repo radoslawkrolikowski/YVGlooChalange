@@ -3,7 +3,7 @@
 import { CornerDownRight, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Avatar, Banner, RoundAvatar, SupportCard } from "@/components/ui";
+import { Avatar, AvatarChip, Banner, RoundAvatar, SupportCard } from "@/components/ui";
 import type { CirclePlanDay, ThreadCircle, ThreadMessage } from "@/lib/circles";
 import type { CrisisResource } from "@/config/crisis-resources";
 
@@ -301,6 +301,8 @@ function MessageList({
             {showSeparator && <DateSeparator iso={message.createdAt} />}
             {message.kind === "icebreaker" ? (
               <IcebreakerRow message={message} />
+            ) : message.kind === "digest" ? (
+              <DigestRow message={message} />
             ) : message.kind === "starters" ? (
               <StartersRow message={message} onReply={onReplyToQuestion} />
             ) : message.kind === "reflection" ? (
@@ -527,6 +529,69 @@ function IcebreakerRow({ message }: { message: ThreadMessage }) {
       <p className="whitespace-pre-wrap break-words font-serif text-[0.98rem] leading-relaxed text-ink">
         {message.body}
       </p>
+    </SystemMessage>
+  );
+}
+
+/**
+ * The daily digest (Step 24): the thread's daily centrepiece. Round reads the
+ * day's reflections and posts a distinguished card through the shared
+ * system-message frame — the synthesis as readable prose, an overlap callout
+ * highlighted with the named members' avatar chips, and one discussion question
+ * set apart as a quote-style block inviting replies. A digest fires only when
+ * enough members reflected, so it always has real words to synthesise.
+ */
+function DigestRow({ message }: { message: ThreadMessage }) {
+  const digest = message.digest;
+  // Fallback: if the structured row ever went missing, show the body prose so
+  // the post is never blank.
+  if (!digest) {
+    return (
+      <SystemMessage
+        createdAt={message.createdAt}
+        label={`Daily digest${message.dayLabel ? ` · ${message.dayLabel}` : ""}`}
+      >
+        <p className="whitespace-pre-wrap break-words font-serif text-[0.98rem] leading-relaxed text-ink">
+          {message.body}
+        </p>
+      </SystemMessage>
+    );
+  }
+  return (
+    <SystemMessage
+      createdAt={message.createdAt}
+      label={`Daily digest${message.dayLabel ? ` · ${message.dayLabel}` : ""}`}
+    >
+      <div className="flex flex-col gap-3">
+        <p className="whitespace-pre-wrap break-words font-serif text-[0.98rem] leading-relaxed text-ink">
+          {digest.synthesis}
+        </p>
+
+        {digest.overlapMembers.length > 0 && digest.overlapTheme && (
+          <div className="rounded-lg border border-gold/50 bg-gold-soft/30 px-3 py-2.5">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-primary">
+              Shared ground
+            </p>
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              {digest.overlapMembers.map((name) => (
+                <AvatarChip key={name} name={name} />
+              ))}
+            </div>
+            <p className="break-words text-sm leading-relaxed text-ink-soft">
+              landed on the same thread — {digest.overlapTheme}
+            </p>
+          </div>
+        )}
+
+        <blockquote className="border-l-2 border-primary/60 pl-3">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-primary">
+            Discussion question
+          </p>
+          <p className="break-words font-serif text-[0.98rem] italic leading-relaxed text-ink">
+            {digest.question}
+          </p>
+        </blockquote>
+      </div>
     </SystemMessage>
   );
 }

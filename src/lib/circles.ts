@@ -14,6 +14,7 @@ import {
   circleMembers,
   circles,
   conversationStarters,
+  digests,
   messages,
   planDays,
   plans,
@@ -253,17 +254,32 @@ export interface ThreadMessage {
   /** ISO 639-1 language of the original, or null when unknown. */
   sourceLanguage: string | null;
   /** "message" (ordinary post), "reflection" (day-tagged, Step 19),
-   * "starters" (Round's conversation-starter card, Step 20), or "icebreaker"
-   * (Round's cold-start opening message, Step 22). */
-  kind: "message" | "reflection" | "starters" | "icebreaker";
-  /** The plan day a reflection or starter set responds to; null otherwise. */
+   * "starters" (Round's conversation-starter card, Step 20), "icebreaker"
+   * (Round's cold-start opening message, Step 22), or "digest" (Round's daily
+   * digest card, Step 24). */
+  kind: "message" | "reflection" | "starters" | "icebreaker" | "digest";
+  /** The plan day a reflection/starters/digest responds to; null otherwise. */
   dayNumber: number | null;
-  /** Human-readable passage label for a reflection/starters card; else null. */
+  /** Human-readable passage label for a reflection/starters/digest; else null. */
   dayLabel: string | null;
   /** The individually replyable questions on a "starters" post; else null. */
   questions: string[] | null;
+  /** The structured digest on a "digest" post (Step 24); null otherwise. */
+  digest: ThreadDigest | null;
   /** ISO timestamp — the client formats the relative label and date separators. */
   createdAt: string;
+}
+
+/** The structured parts of a daily digest, for the thread's digest card. */
+export interface ThreadDigest {
+  /** 2–3 sentence collective synthesis. */
+  synthesis: string;
+  /** Display names of the members who converged — avatar chips in the callout. */
+  overlapMembers: string[];
+  /** The shared theme/line, or null when there was no genuine overlap. */
+  overlapTheme: string | null;
+  /** The grounded discussion question, set apart as a quote block. */
+  question: string;
 }
 
 /** The circle header the thread screen needs — name, state, membership. */
@@ -307,14 +323,16 @@ function threadKind(kind: string): ThreadMessage["kind"] {
   if (kind === "reflection") return "reflection";
   if (kind === "starters") return "starters";
   if (kind === "icebreaker") return "icebreaker";
+  if (kind === "digest") return "digest";
   return "message";
 }
 
 /**
  * A circle's messages, oldest first — original bodies with author names.
- * The author join is a LEFT join: Round's system posts (Step 20 starters, and
- * later the icebreaker/digest/summary) have no author row, and they carry
- * their replyable question list from conversation_starters.
+ * The author join is a LEFT join: Round's system posts (Step 20 starters, the
+ * Step 22 icebreaker, the Step 24 digest) have no author row. Starters carry
+ * their replyable question list from conversation_starters; digests carry their
+ * structured parts from the digests table — both joined on messageId.
  */
 export async function loadThreadMessages(
   circleId: string,
@@ -330,6 +348,10 @@ export async function loadThreadMessages(
       dayNumber: messages.dayNumber,
       dayLabel: messages.dayLabel,
       questions: conversationStarters.questions,
+      digestSynthesis: digests.synthesis,
+      digestOverlapMembers: digests.overlapMembers,
+      digestOverlapTheme: digests.overlapTheme,
+      digestQuestion: digests.question,
       createdAt: messages.createdAt,
     })
     .from(messages)
@@ -338,6 +360,7 @@ export async function loadThreadMessages(
       conversationStarters,
       eq(conversationStarters.messageId, messages.id),
     )
+    .leftJoin(digests, eq(digests.messageId, messages.id))
     .where(eq(messages.circleId, circleId))
     .orderBy(asc(messages.createdAt));
 
@@ -357,6 +380,15 @@ export async function loadThreadMessages(
         kind === "starters"
           ? // Fall back to the body's lines if the starters row ever vanishes.
             (row.questions?.length ? row.questions : row.body.split("\n"))
+          : null,
+      digest:
+        kind === "digest" && row.digestSynthesis && row.digestQuestion
+          ? {
+              synthesis: row.digestSynthesis,
+              overlapMembers: row.digestOverlapMembers ?? [],
+              overlapTheme: row.digestOverlapTheme,
+              question: row.digestQuestion,
+            }
           : null,
       createdAt: row.createdAt.toISOString(),
     };
