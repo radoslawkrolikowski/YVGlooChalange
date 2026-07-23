@@ -280,6 +280,10 @@ export interface ThreadDigest {
   overlapTheme: string | null;
   /** The grounded discussion question, set apart as a quote block. */
   question: string;
+  /** The 3–5 sentence plain-language lesson summary (Step 25), shown as a
+   * collapsed disclosure inside the digest card. Null on older digests written
+   * before Step 25 — the card then simply omits the summary section. */
+  summary: string | null;
 }
 
 /** The circle header the thread screen needs — name, state, membership. */
@@ -352,6 +356,7 @@ export async function loadThreadMessages(
       digestOverlapMembers: digests.overlapMembers,
       digestOverlapTheme: digests.overlapTheme,
       digestQuestion: digests.question,
+      digestSummary: digests.summary,
       createdAt: messages.createdAt,
     })
     .from(messages)
@@ -388,6 +393,7 @@ export async function loadThreadMessages(
               overlapMembers: row.digestOverlapMembers ?? [],
               overlapTheme: row.digestOverlapTheme,
               question: row.digestQuestion,
+              summary: row.digestSummary,
             }
           : null,
       createdAt: row.createdAt.toISOString(),
