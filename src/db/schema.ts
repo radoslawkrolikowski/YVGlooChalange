@@ -652,6 +652,45 @@ export const notes = pgTable(
   ],
 );
 
+// --- Scheduled agent runs (Step 23) ---------------------------------------
+//
+// The idempotency rail every scheduled agent rides (plan → Decisions → Agent
+// Scheduling). One row per (agent, target, period): a sweep's FIRST action for
+// each eligible target is an INSERT here; a unique-violation means that
+// period's work was already done, and the sweep exits for that target without
+// calling Gloo or writing anything else. Re-running any cron endpoint any
+// number of times can therefore never double-fire an agent. Output tables
+// carry their own matching unique constraints as a second fence (e.g.
+// conversation_starters per circle+day; digests per circle+day in Step 24).
+//
+// period_key shapes: daily sweeps use "2026-07-23"; the 12-hourly Health
+// sweep uses "2026-07-23-am" / "-pm" (the Step 24A convention). target_id is
+// a circle id (facilitator/health), user id (reminder), or a fixed sentinel
+// for singleton jobs (demo refresh, Step 31).
+export const agentRuns = pgTable(
+  "agent_runs",
+  {
+    id: serial("id").primaryKey(),
+    /** Scheduled job that ran, e.g. "facilitator", "reminder", "health". */
+    agentName: text("agent_name").notNull(),
+    /** What it ran against: circle id, user id, or a singleton sentinel. */
+    targetId: text("target_id").notNull(),
+    /** The cadence period this run covers — see shapes above. */
+    periodKey: text("period_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // THE constraint. Claiming a run is inserting into this index.
+    uniqueIndex("agent_runs_agent_target_period_idx").on(
+      table.agentName,
+      table.targetId,
+      table.periodKey,
+    ),
+  ],
+);
+
 export const agentLogs = pgTable("agent_logs", {
   id: serial("id").primaryKey(),
   /** Agent that made the call, e.g. "facilitator"; "dev" for dev routes. */
