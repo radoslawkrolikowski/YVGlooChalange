@@ -301,6 +301,8 @@ function MessageList({
             {showSeparator && <DateSeparator iso={message.createdAt} />}
             {message.kind === "icebreaker" ? (
               <IcebreakerRow message={message} />
+            ) : message.kind === "companion" ? (
+              <CompanionRow message={message} />
             ) : message.kind === "digest" ? (
               <DigestRow message={message} />
             ) : message.kind === "starters" ? (
@@ -526,6 +528,28 @@ function StartersRow({
 function IcebreakerRow({ message }: { message: ThreadMessage }) {
   return (
     <SystemMessage createdAt={message.createdAt} label="Welcome to your circle">
+      <p className="whitespace-pre-wrap break-words font-serif text-[0.98rem] leading-relaxed text-ink">
+        {message.body}
+      </p>
+    </SystemMessage>
+  );
+}
+
+/**
+ * The Companion turn (Step 24A): when a day's conversation has stalled, Round
+ * takes one short turn to keep it alive — picking up something a member said
+ * and opening it to the others, or gently re-opening the day's starters when no
+ * one has spoken. It is the digest's inverse and shares its rail; rendered
+ * through the same shared system-message frame (Round mark, "Round" attribution,
+ * tinted full-width surface) as the icebreaker and digest, so it can never be
+ * mistaken for a member message.
+ */
+function CompanionRow({ message }: { message: ThreadMessage }) {
+  return (
+    <SystemMessage
+      createdAt={message.createdAt}
+      label={message.dayLabel ? `Round · ${message.dayLabel}` : "Round"}
+    >
       <p className="whitespace-pre-wrap break-words font-serif text-[0.98rem] leading-relaxed text-ink">
         {message.body}
       </p>

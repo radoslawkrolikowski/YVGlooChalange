@@ -13,6 +13,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { agentRuns, circles, userPlanProgress } from "@/db/schema";
 import { dailyPeriodKey, halfDayPeriodKey } from "@/lib/cron";
+import { runCircleCompanion } from "@/lib/companion";
 import { runCircleDigest } from "@/lib/digest";
 
 export interface SweepTarget {
@@ -37,6 +38,7 @@ export type CronJobName =
   | "facilitator"
   | "reminder"
   | "health"
+  | "companion"
   | "demo-refresh";
 
 /**
@@ -179,6 +181,59 @@ export async function healthSweep(): Promise<SweepResult> {
     targets,
     "Health Agent is a stub — classification and actions land in Step 34.",
   );
+}
+
+/**
+ * 12-hourly Companion sweep, per active circle (Step 24A) — the digest's
+ * inverse, revives a stalled day. Eligible: active circles (a conversation
+ * needs members). Per circle, claim the agent_runs row (period key
+ * "2026-07-23-am"/"-pm") — the first idempotency fence, so Round takes at most
+ * one turn per sweep and a re-run spends no Gloo call. On a successful claim run
+ * the Companion (resolve the current plan day, check the eligibility gates,
+ * screen the thread Escalation-first, generate and post the turn). A conflicting
+ * claim reports "already_ran" and does nothing. A generation/screening error
+ * releases the claim so a later sweep retries; an eligibility no-op or a
+ * crisis-silence keeps the claim (that decision is final for the period).
+ */
+export async function companionSweep(): Promise<SweepResult> {
+  const periodKey = halfDayPeriodKey();
+  const eligible = await db
+    .select({ id: circles.id })
+    .from(circles)
+    .where(eq(circles.state, "active"));
+
+  const targets: SweepTarget[] = [];
+  for (const circle of eligible) {
+    const [claim] = await db
+      .insert(agentRuns)
+      .values({ agentName: "companion", targetId: circle.id, periodKey })
+      .onConflictDoNothing()
+      .returning({ id: agentRuns.id });
+    if (!claim) {
+      targets.push({ targetId: circle.id, status: "already_ran" });
+      continue;
+    }
+
+    const outcome = await runCircleCompanion(circle.id);
+    if (!outcome.posted && outcome.reason === "error") {
+      // Release the claim so a later sweep can retry this circle.
+      await db
+        .delete(agentRuns)
+        .where(
+          and(
+            eq(agentRuns.agentName, "companion"),
+            eq(agentRuns.targetId, circle.id),
+            eq(agentRuns.periodKey, periodKey),
+          ),
+        )
+        .catch(() => {
+          // Keep the claim if the release fails — no turn, but no crash.
+        });
+    }
+    targets.push({ targetId: circle.id, status: "ran", detail: outcome.detail });
+  }
+
+  return summarise("companion", periodKey, targets);
 }
 
 /**

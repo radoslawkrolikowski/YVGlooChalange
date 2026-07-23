@@ -12,6 +12,7 @@ import { postReading } from "./post-reading";
 import { matching } from "./matching";
 import { facilitator } from "./facilitator";
 import { summary } from "./summary";
+import { companion } from "./companion";
 import { prayer } from "./prayer";
 import { reminder } from "./reminder";
 import { escalation } from "./escalation";
@@ -28,6 +29,7 @@ export const agents: readonly AnyAgent[] = [
   matching,
   facilitator,
   summary,
+  companion,
   prayer,
   reminder,
   escalation,
