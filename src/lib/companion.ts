@@ -36,11 +36,12 @@
 // Reflections already passed the Step 18 gate at submission (Step 19), so they
 // are NOT re-screened here; only ordinary member messages are.
 //
-// Single language for now — the earliest member's, English fallback, mirroring
-// the digest (Step 24) and icebreaker (Step 22). Per brief §5.12 AI content is
-// never translated after the fact; Step 28 upgrades this into one native
-// generation per member language, so Step 27's Translation Agent skips
-// authorId-null system posts.
+// Per-language native generation (Step 28) — the turn is generated in the base
+// language (earliest member's, English fallback) for the messages row, then
+// again in every OTHER distinct member language as a message_variants row. Per
+// brief §5.12 AI content is never translated after the fact; Step 27's
+// Translation Agent skips these authorId-null system posts. Each reader sees the
+// turn in their own language; a variant failure leaves them on the base turn.
 //
 // Path A only — circles are membership rows against users.id, so anonymous
 // Instant Access sessions never reach this module.
@@ -54,10 +55,11 @@ import {
   conversationStarters,
   digests,
   messages,
+  messageVariants,
   reflections,
   users,
 } from "@/db/schema";
-import { loadCirclePlanDay } from "@/lib/circles";
+import { loadCircleMemberLanguages, loadCirclePlanDay } from "@/lib/circles";
 import { screenReflection } from "@/lib/escalation";
 import { fetchPassage } from "@/lib/youversion";
 
@@ -351,15 +353,53 @@ export async function runCircleCompanion(
     });
 
     // authorId null so it renders with Round's system identity (Step 20).
-    await db.insert(messages).values({
-      circleId,
-      authorId: null,
-      body: output.turn,
-      sourceLanguage: facts.language,
-      kind: "companion",
-      dayNumber: planDay.dayNumber,
-      dayLabel: planDay.label,
-    });
+    const [message] = await db
+      .insert(messages)
+      .values({
+        circleId,
+        authorId: null,
+        body: output.turn,
+        sourceLanguage: facts.language,
+        kind: "companion",
+        dayNumber: planDay.dayNumber,
+        dayLabel: planDay.label,
+      })
+      .returning({ id: messages.id });
+
+    // Step 28 — one native generation per OTHER member language present in the
+    // circle. Each reader sees Round's turn in their own language, never a
+    // translation (brief §5.12). Same passage, thread, and starter questions
+    // ground every language; only the turn text is regenerated. Best-effort per
+    // language — a failure leaves that reader on the base-language turn.
+    const mode = memberMessages.length > 0 ? "pickup" : "reopen";
+    const languages = await loadCircleMemberLanguages(circleId);
+    for (const language of languages) {
+      if (language === facts.language) continue;
+      try {
+        const variant = await generateCompanionTurn({
+          passageReference: planDay.reference,
+          passageText: passage.content.slice(0, MAX_PASSAGE_CHARS),
+          dayLabel: planDay.label,
+          mode,
+          memberMessages,
+          starterQuestions,
+          language,
+        });
+        await db
+          .insert(messageVariants)
+          .values({
+            messageId: message.id,
+            language,
+            body: variant.output.turn,
+            model: variant.model,
+          })
+          .onConflictDoNothing({
+            target: [messageVariants.messageId, messageVariants.language],
+          });
+      } catch {
+        // Best-effort: this reader falls back to the base-language turn.
+      }
+    }
 
     return { posted: true, detail: `companion turn posted for ${planDay.label}` };
   } catch (error) {

@@ -176,6 +176,13 @@
       "when": 1784838194900,
       "tag": "0024_modern_kingpin",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784903630294,
+      "tag": "0025_step-28-message-variants",
+      "breakpoints": true
     }
   ]
 }

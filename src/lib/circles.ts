@@ -16,6 +16,7 @@ import {
   conversationStarters,
   digests,
   messageTranslations,
+  messageVariants,
   messages,
   planDays,
   plans,
@@ -348,6 +349,26 @@ export async function loadThreadCircle(
   return { ...circle, state: circle.state as CircleState };
 }
 
+/**
+ * The distinct preferred languages of a circle's members (ISO 639-1), each once.
+ * Members with no set language count as English. This is the set Step 28's AI
+ * agents generate a native variant for — one generation per language present —
+ * so every reader gets the digest / starters / icebreaker / Companion turn in
+ * their own language without any after-the-fact translation (brief §5.12).
+ */
+export async function loadCircleMemberLanguages(
+  circleId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ language: users.language })
+    .from(circleMembers)
+    .innerJoin(users, eq(users.id, circleMembers.userId))
+    .where(eq(circleMembers.circleId, circleId));
+  const languages = new Set<string>();
+  for (const row of rows) languages.add(row.language ?? "en");
+  return [...languages];
+}
+
 /** Thread message kinds, narrowed from the free-text column. */
 function threadKind(kind: string): ThreadMessage["kind"] {
   if (kind === "reflection") return "reflection";
@@ -373,6 +394,15 @@ function threadKind(kind: string): ThreadMessage["kind"] {
  * (cached) or is marked `translationPending` (async run not finished). System
  * posts and same-language messages carry neither. Omit `readerLanguage` (e.g.
  * server-side seeds) and every row renders in its original with no translation.
+ *
+ * Step 28: for Round's AI system posts (authorId null), `readerLanguage` also
+ * selects a NATIVE language variant from message_variants — the digest,
+ * summary, starters, icebreaker, and Companion turn are generated directly in
+ * each member language, never translated (brief §5.12). When a variant exists
+ * for the reader's language it renders in place of the base-language content
+ * (with NO "Translated by Round" label — it is a native generation); when none
+ * exists the reader sees the base-language post. Member-authored posts are never
+ * varianted — they go through the Translation Agent above instead.
  */
 export async function loadThreadMessages(
   circleId: string,
@@ -395,6 +425,12 @@ export async function loadThreadMessages(
       digestQuestion: digests.question,
       digestSummary: digests.summary,
       translationBody: messageTranslations.body,
+      variantBody: messageVariants.body,
+      variantQuestions: messageVariants.questions,
+      variantSynthesis: messageVariants.synthesis,
+      variantOverlapTheme: messageVariants.overlapTheme,
+      variantQuestion: messageVariants.question,
+      variantSummary: messageVariants.summary,
       createdAt: messages.createdAt,
     })
     .from(messages)
@@ -415,6 +451,17 @@ export async function loadThreadMessages(
           )
         : sql`false`,
     )
+    // Step 28: the reader's native language variant of an AI system post, when
+    // one exists — same one-target discipline as the translation join.
+    .leftJoin(
+      messageVariants,
+      readerLanguage
+        ? and(
+            eq(messageVariants.messageId, messages.id),
+            eq(messageVariants.language, readerLanguage),
+          )
+        : sql`false`,
+    )
     .where(eq(messages.circleId, circleId))
     .orderBy(asc(messages.createdAt));
 
@@ -432,29 +479,54 @@ export async function loadThreadMessages(
       translatable && row.translationBody
         ? { body: row.translationBody, targetLanguage: readerLanguage! }
         : null;
+
+    // Step 28: a native language variant only ever attaches to an AI system
+    // post (authorId null). When present it supplies the reader-language content
+    // in place of the base; the overlap MEMBER names always come from the base
+    // digests row (they are display names, language-independent). Absent → the
+    // base-language content renders unchanged.
+    const variant =
+      row.authorId === null && row.variantBody
+        ? {
+            body: row.variantBody,
+            questions: row.variantQuestions,
+            synthesis: row.variantSynthesis,
+            overlapTheme: row.variantOverlapTheme,
+            question: row.variantQuestion,
+            summary: row.variantSummary,
+          }
+        : null;
+    const displayBody = variant?.body ?? row.body;
     return {
       id: row.id,
       authorId: row.authorId,
       // Round is the author of every system post — never a member's name.
       authorName: row.authorId === null ? "Round" : (row.authorName ?? "Reader"),
-      body: row.body,
+      body: displayBody,
       sourceLanguage: row.sourceLanguage,
       kind,
       dayNumber: row.dayNumber,
       dayLabel: row.dayLabel,
       questions:
         kind === "starters"
-          ? // Fall back to the body's lines if the starters row ever vanishes.
-            (row.questions?.length ? row.questions : row.body.split("\n"))
+          ? // Prefer the reader-language variant, then the base row's questions,
+            // then the body's lines if the starters row ever vanishes.
+            (variant?.questions?.length
+              ? variant.questions
+              : row.questions?.length
+                ? row.questions
+                : displayBody.split("\n"))
           : null,
       digest:
-        kind === "digest" && row.digestSynthesis && row.digestQuestion
+        kind === "digest" &&
+        (variant?.synthesis ?? row.digestSynthesis) &&
+        (variant?.question ?? row.digestQuestion)
           ? {
-              synthesis: row.digestSynthesis,
+              synthesis: variant?.synthesis ?? row.digestSynthesis!,
               overlapMembers: row.digestOverlapMembers ?? [],
-              overlapTheme: row.digestOverlapTheme,
-              question: row.digestQuestion,
-              summary: row.digestSummary,
+              overlapTheme: variant?.overlapTheme ?? row.digestOverlapTheme,
+              question: variant?.question ?? row.digestQuestion!,
+              summary: variant?.summary ?? row.digestSummary,
             }
           : null,
       translation,

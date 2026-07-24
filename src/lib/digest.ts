@@ -31,10 +31,15 @@
 // excluded from input (`where flagged = false`) per the escalation-handling
 // decision.
 //
-// Single language for now — the earliest member's, English fallback, mirroring
-// the icebreaker (Step 22). Per brief §5.12 AI content is never translated after
-// the fact; Step 28 upgrades this into one native generation per member
-// language, so Step 27's Translation Agent skips authorId-null system posts.
+// Per-language native generation (Step 28). The base digest and summary are
+// generated in the circle's base language (the earliest member's, English
+// fallback) and posted as the messages/digests rows. Then, for every OTHER
+// distinct member language present, the Facilitator and Summary agents are run
+// AGAIN in that language and stored as message_variants rows — one native
+// generation per language, never a translation (brief §5.12). Each reader's
+// thread renders the variant in their own language; Step 27's Translation Agent
+// skips these authorId-null system posts entirely. A variant failure is
+// swallowed per language — the base post always stands.
 //
 // Path A only — circles are membership rows against users.id, so anonymous
 // Instant Access sessions never reach this module.
@@ -44,12 +49,39 @@ import { generateDigest } from "@/agents/facilitator";
 import { generateSummary } from "@/agents/summary";
 import { effectiveVersionId } from "@/config/bible-versions";
 import { db } from "@/db";
-import { circleMembers, digests, messages, reflections, users } from "@/db/schema";
-import { loadCirclePlanDay } from "@/lib/circles";
+import {
+  circleMembers,
+  digests,
+  messages,
+  messageVariants,
+  reflections,
+  users,
+} from "@/db/schema";
+import { loadCircleMemberLanguages, loadCirclePlanDay } from "@/lib/circles";
 import { fetchPassage } from "@/lib/youversion";
 
 /** Passage text is grounding context only — cap it to keep the prompt small. */
 const MAX_PASSAGE_CHARS = 4000;
+
+/**
+ * The readable prose body carried on the thread post (and each variant), so a
+ * message-centric consumer has plain text and the post is never blank if the
+ * structured row is ever unavailable. Overlap names are language-independent; the
+ * theme phrase is in the same language as the synthesis/question passed here.
+ */
+function buildDigestBody(
+  synthesis: string,
+  overlapMembers: string[],
+  overlapTheme: string | null,
+  question: string,
+): string {
+  const lines = [synthesis];
+  if (overlapMembers.length > 0 && overlapTheme) {
+    lines.push("", `Shared: ${overlapMembers.join(", ")} — ${overlapTheme}`);
+  }
+  lines.push("", question);
+  return lines.join("\n");
+}
 
 /** The outcome of one circle's digest attempt, for the sweep to report. */
 export type DigestOutcome =
@@ -260,18 +292,17 @@ export async function runCircleDigest(circleId: string): Promise<DigestOutcome> 
     // too: it keeps the post meaningful if the digests row is ever unavailable,
     // and gives a message-centric consumer plain text to read. authorId null so
     // it renders with Round's system identity.
-    const bodyLines = [digest.synthesis];
-    if (overlapMembers.length > 0 && overlapTheme) {
-      bodyLines.push("", `Shared: ${overlapMembers.join(", ")} — ${overlapTheme}`);
-    }
-    bodyLines.push("", digest.question);
-
     const [message] = await db
       .insert(messages)
       .values({
         circleId,
         authorId: null,
-        body: bodyLines.join("\n"),
+        body: buildDigestBody(
+          digest.synthesis,
+          overlapMembers,
+          overlapTheme,
+          digest.question,
+        ),
         sourceLanguage: facts.language,
         kind: "digest",
         dayNumber: planDay.dayNumber,
@@ -292,6 +323,22 @@ export async function runCircleDigest(circleId: string): Promise<DigestOutcome> 
       })
       .where(eq(digests.id, claim.id));
 
+    // Step 28 — one native generation per OTHER member language. The overlap
+    // MEMBER names are reused as-is (display names, language-independent); only
+    // the theme phrase, synthesis, question, and summary are regenerated in the
+    // reader's language. Each variant is best-effort: a failure leaves the base
+    // digest standing rather than releasing the whole day's claim.
+    await generateDigestVariants({
+      messageId: message.id,
+      baseLanguage: facts.language,
+      circleId,
+      passageReference: planDay.reference,
+      passageText,
+      reflections: dayReflections.entries,
+      overlapMembers,
+      baseOverlapTheme: overlapTheme,
+    });
+
     return { posted: true, detail: `digest posted for ${planDay.label}` };
   } catch (error) {
     // Release the claim so a later sweep can retry — the (circle, day) unique
@@ -307,5 +354,82 @@ export async function runCircleDigest(circleId: string): Promise<DigestOutcome> 
       reason: "error",
       detail: `generation failed: ${error instanceof Error ? error.message : String(error)}`,
     };
+  }
+}
+
+interface DigestVariantsInput {
+  messageId: string;
+  /** The base post's own language — skipped; it already lives on the base rows. */
+  baseLanguage: string;
+  circleId: string;
+  passageReference: string;
+  passageText: string;
+  reflections: { authorDisplayName: string; text: string }[];
+  /** Validated overlap member names, reused for every language (chips). */
+  overlapMembers: string[];
+  /** The base-language theme phrase, used as a fallback if a variant omits one. */
+  baseOverlapTheme: string | null;
+}
+
+/**
+ * Generate and store one native digest+summary variant per distinct member
+ * language other than the base. Each language is independent and best-effort: a
+ * failure is swallowed so one language never robs another (or the base post) of
+ * its digest. The (message, language) primary key makes a re-run idempotent —
+ * the digest's own (circle, day) claim already gates the whole run, so this only
+ * ever executes once per digest.
+ */
+async function generateDigestVariants(input: DigestVariantsInput): Promise<void> {
+  const languages = await loadCircleMemberLanguages(input.circleId);
+  const hasOverlap = input.overlapMembers.length >= 2;
+
+  for (const language of languages) {
+    if (language === input.baseLanguage) continue;
+    try {
+      const { digest, model } = await generateDigest({
+        passageReference: input.passageReference,
+        passageText: input.passageText,
+        reflections: input.reflections,
+        language,
+      });
+      // Reuse the base overlap decision; only the theme phrase is taken in the
+      // reader's language (falling back to the base phrase if the model omitted
+      // one). Overlap names come from the base row at render time.
+      const overlapTheme = hasOverlap
+        ? (digest.overlap.theme || input.baseOverlapTheme)
+        : null;
+      const circleThemes = [digest.synthesis, overlapTheme].filter(
+        (theme): theme is string => Boolean(theme),
+      );
+      const { summary } = await generateSummary({
+        passageReference: input.passageReference,
+        passageText: input.passageText,
+        circleThemes,
+        language,
+      });
+
+      await db
+        .insert(messageVariants)
+        .values({
+          messageId: input.messageId,
+          language,
+          body: buildDigestBody(
+            digest.synthesis,
+            input.overlapMembers,
+            overlapTheme,
+            digest.question,
+          ),
+          synthesis: digest.synthesis,
+          overlapTheme,
+          question: digest.question,
+          summary,
+          model,
+        })
+        .onConflictDoNothing({
+          target: [messageVariants.messageId, messageVariants.language],
+        });
+    } catch {
+      // Best-effort: this reader falls back to the base-language digest.
+    }
   }
 }
