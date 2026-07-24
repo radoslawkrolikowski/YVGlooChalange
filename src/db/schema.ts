@@ -389,13 +389,16 @@ export const circleMembers = pgTable(
 // surface every later feature (reflections, starters, digests, translations —
 // Steps 19–28) extends. Two rules from the brief shape the schema:
 //
-//   * The original is immutable (brief §5.12, constraint #6): `body` and
-//     `sourceLanguage` are written once at post time and never modified. All
-//     translation is additive, in the separate table below.
+//   * The author's WORDS are immutable (brief §5.12, constraint #6): `body` is
+//     written once at post time and never modified. All translation is
+//     additive, in the separate table below.
 //   * `sourceLanguage` is the message's own language, needed by the Translation
-//     Agent (Step 19+) to decide which readers need a translation. Step 17
-//     fills it best-effort from the author's profile language (no detection
-//     call yet); nullable when the author has not set a language.
+//     Agent (Step 27) to decide which readers need a translation. Step 17 fills
+//     it best-effort from the author's profile language (no detection call yet),
+//     nullable when the author has not set one; Step 27's Translation Agent then
+//     REFINES it with detected source language (regex-then-Gloo cascade) so the
+//     thread's per-reader rendering is accurate. This is a metadata correction,
+//     never a change to `body`.
 export const messages = pgTable(
   "messages",
   {
@@ -441,11 +444,12 @@ export const messages = pgTable(
 );
 
 // Additive, per-target-language translations of a message (brief §5.12).
-// Created here as an empty shell — the Translation Agent (Step 19+) writes
-// rows; nothing in Step 17 does. One row per (message, target language): a
-// message is never re-translated for the same language, and the original is
-// never touched. The polling thread built in Step 17 later delivers these
-// swaps for free (Decisions → translation timing: asynchronous).
+// The Translation Agent (Step 27) writes rows post-persist via `after()`, one
+// per distinct circle-member language that differs from the source; nothing in
+// Step 17 does. The composite PK (message, target language) makes "never
+// re-translate the same target" structural — the original is never touched.
+// The Step 17 polling thread delivers these swaps for free (Decisions →
+// translation timing: asynchronous).
 export const messageTranslations = pgTable(
   "message_translations",
   {

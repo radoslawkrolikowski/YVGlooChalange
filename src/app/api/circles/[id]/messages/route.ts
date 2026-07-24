@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { db } from "@/db";
 import { messages } from "@/db/schema";
 import { isCircleMember, loadThreadMessages } from "@/lib/circles";
 import { resolveSession } from "@/lib/session";
+import { translateNewMessage } from "@/lib/translation";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export async function GET(
   const guard = await requireMember(request, circleId);
   if (guard.error) return guard.error;
 
-  const messageList = await loadThreadMessages(circleId);
+  const messageList = await loadThreadMessages(circleId, guard.session.language);
   return NextResponse.json({ ok: true, messages: messageList });
 }
 
@@ -105,8 +106,13 @@ export async function POST(
     })
     .returning({ id: messages.id });
 
+  // Translate into each distinct circle-member language after the response, so
+  // the Gloo fan-out never blocks the post (Decisions → asynchronous timing).
+  // The thread's 10-second poll swaps in each translation as it lands.
+  after(() => translateNewMessage(inserted.id));
+
   // Return the fresh thread so the poster sees their message immediately,
-  // without waiting for the next poll interval.
-  const messageList = await loadThreadMessages(circleId);
+  // without waiting for the next poll interval — in the poster's own language.
+  const messageList = await loadThreadMessages(circleId, session.language);
   return NextResponse.json({ ok: true, id: inserted.id, messages: messageList });
 }
