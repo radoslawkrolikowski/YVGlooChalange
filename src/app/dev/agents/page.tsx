@@ -39,7 +39,7 @@ const cronJobs: {
     job: "reminder",
     displayName: "Reminder sweep",
     description:
-      "Daily, per user with an active reading plan. Claims one agent_runs row per user; Step 29 adds reminder generation and delivery.",
+      "Daily, per user with an active reading plan. Per user: generates a reading reminder (2+ days behind) and/or an unread-messages summary via Gloo and delivers them to the notification bell (in-app only, no email).",
     schedule: "daily · via daily sweep",
     names: ["reminder"],
   },

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Avatar, Menu, MenuItem } from "@/components/ui";
 import { clearAnonSession } from "@/lib/use-anon-session";
+import { NotificationBell } from "./notification-bell";
 
 /*
  * Header avatar menu (Step 8C): initials avatar + chevron opening "Profile"
@@ -38,32 +39,37 @@ export function HeaderMenu({
   }
 
   return (
-    <Menu
-      label="Account menu"
-      trigger={
-        <>
-          {/* "Reader #4" would yield "R#" initials; drop the "#" so the
-              anonymous avatar reads "R4". */}
-          <Avatar name={displayName.replace("#", "")} size="sm" />
-          <ChevronDown size={16} aria-hidden className="text-ink-faint" />
-        </>
-      }
-    >
-      <MenuItem href="/profile" icon={<User size={16} aria-hidden />}>
-        Profile
-      </MenuItem>
-      <MenuItem
-        tone="danger"
-        disabled={signingOut}
-        onSelect={leave}
-        icon={<LogOut size={16} aria-hidden />}
+    <div className="flex items-center gap-1">
+      {/* Notification bell — Path A only; Instant Access has no notifications
+          (no database row, per the brief). Sits left of the account menu. */}
+      {!isAnonymous && <NotificationBell />}
+      <Menu
+        label="Account menu"
+        trigger={
+          <>
+            {/* "Reader #4" would yield "R#" initials; drop the "#" so the
+                anonymous avatar reads "R4". */}
+            <Avatar name={displayName.replace("#", "")} size="sm" />
+            <ChevronDown size={16} aria-hidden className="text-ink-faint" />
+          </>
+        }
       >
-        {isAnonymous
-          ? "End session"
-          : signingOut
-            ? "Signing out…"
-            : "Sign out"}
-      </MenuItem>
-    </Menu>
+        <MenuItem href="/profile" icon={<User size={16} aria-hidden />}>
+          Profile
+        </MenuItem>
+        <MenuItem
+          tone="danger"
+          disabled={signingOut}
+          onSelect={leave}
+          icon={<LogOut size={16} aria-hidden />}
+        >
+          {isAnonymous
+            ? "End session"
+            : signingOut
+              ? "Signing out…"
+              : "Sign out"}
+        </MenuItem>
+      </Menu>
+    </div>
   );
 }

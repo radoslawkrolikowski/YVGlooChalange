@@ -15,6 +15,7 @@ import { agentRuns, circles, userPlanProgress } from "@/db/schema";
 import { dailyPeriodKey, halfDayPeriodKey } from "@/lib/cron";
 import { runCircleCompanion } from "@/lib/companion";
 import { runCircleDigest } from "@/lib/digest";
+import { runUserReminders } from "@/lib/reminders";
 
 export interface SweepTarget {
   targetId: string;
@@ -136,9 +137,18 @@ export async function facilitatorSweep(): Promise<SweepResult> {
 }
 
 /**
- * Daily Reminder sweep, per user. Eligible: users with an active reading
- * plan — the only users who can fall behind one. Step 29 adds the real work
- * (behind-schedule check, Gloo reminder, in-app + email delivery).
+ * Daily Reminder sweep, per user (Step 29). Eligible: users with an active
+ * reading plan — the only users who can fall behind one (a user with no plan but
+ * a stalled circle still can't fall "behind", and a message reminder without a
+ * plan is a rare edge not worth sweeping every user for).
+ *
+ * Per user, claim the agent_runs row (the first idempotency fence); on a
+ * successful claim run both reminder types and deliver any that are due to the
+ * notification bell (Gloo generation + in-app insert, no email). A conflicting
+ * claim reports "already_ran" and does nothing. A generation error releases the
+ * claim so a later sweep retries; the notifications (user, type, day) unique
+ * index is the second fence that keeps a retry from ever duplicating a delivered
+ * reminder.
  */
 export async function reminderSweep(): Promise<SweepResult> {
   const periodKey = dailyPeriodKey();
@@ -146,17 +156,39 @@ export async function reminderSweep(): Promise<SweepResult> {
     .select({ userId: userPlanProgress.userId })
     .from(userPlanProgress)
     .where(eq(userPlanProgress.isActive, true));
-  const targets = await claimAll(
-    "reminder",
-    periodKey,
-    eligible.map((row) => row.userId),
-  );
-  return summarise(
-    "reminder",
-    periodKey,
-    targets,
-    "Claims only in Step 23 — reminder generation lands in Step 29.",
-  );
+
+  const targets: SweepTarget[] = [];
+  for (const { userId } of eligible) {
+    const [claim] = await db
+      .insert(agentRuns)
+      .values({ agentName: "reminder", targetId: userId, periodKey })
+      .onConflictDoNothing()
+      .returning({ id: agentRuns.id });
+    if (!claim) {
+      targets.push({ targetId: userId, status: "already_ran" });
+      continue;
+    }
+
+    const outcome = await runUserReminders(userId, periodKey);
+    if (outcome.errored) {
+      // Release the claim so a later sweep can retry this user's reminders.
+      await db
+        .delete(agentRuns)
+        .where(
+          and(
+            eq(agentRuns.agentName, "reminder"),
+            eq(agentRuns.targetId, userId),
+            eq(agentRuns.periodKey, periodKey),
+          ),
+        )
+        .catch(() => {
+          // Keep the claim if the release fails — no retry, but no crash.
+        });
+    }
+    targets.push({ targetId: userId, status: "ran", detail: outcome.detail });
+  }
+
+  return summarise("reminder", periodKey, targets);
 }
 
 /**

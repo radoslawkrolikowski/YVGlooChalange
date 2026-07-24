@@ -9,14 +9,14 @@ and the Gloo AI Studio API.
 ## Stack
 
 Next.js (App Router) · Vercel · Vercel Postgres (Neon) · Drizzle ORM ·
-NextAuth.js (YouVersion OAuth) · Resend
+NextAuth.js (YouVersion OAuth)
 
 ## Local development
 
 ```bash
 npm install
 cp .env.example .env.local   # fill in values as steps require them
-docker compose up -d         # PostgreSQL 16 (localhost:5433) + Mailpit (http://localhost:8025)
+docker compose up -d         # PostgreSQL 16 (localhost:5433)
 npm run db:migrate           # apply committed migrations to the local database
 npm run dev                  # http://localhost:3000
 ```
