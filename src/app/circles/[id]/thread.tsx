@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, CornerDownRight, X } from "lucide-react";
+import { ChevronDown, CornerDownRight, HandHeart, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Avatar, AvatarChip, Banner, RoundAvatar, SupportCard } from "@/components/ui";
@@ -307,6 +307,11 @@ function MessageList({
               <DigestRow message={message} />
             ) : message.kind === "starters" ? (
               <StartersRow message={message} onReply={onReplyToQuestion} />
+            ) : message.kind === "shared_prayer" ? (
+              <SharedPrayerRow
+                message={message}
+                own={message.authorId === currentUserId}
+              />
             ) : message.kind === "reflection" ? (
               <ReflectionRow
                 message={message}
@@ -417,6 +422,51 @@ function ReflectionRow({
           </p>
           <p className="whitespace-pre-wrap break-words font-serif text-[0.98rem] leading-relaxed text-ink">
             {message.body}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A shared prayer (Step 26): a member chose to share a prayer with the circle,
+ * recast by Round to intercede for them by name ("I pray that Maria will…").
+ * Member-authored (so it translates like any message), but visually its own
+ * thing — a soft accent surface with a praying-hands motif and a "composed with
+ * Round" note, distinct from both ordinary messages and reflections.
+ */
+function SharedPrayerRow({
+  message,
+  own,
+}: {
+  message: ThreadMessage;
+  own: boolean;
+}) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <Avatar name={message.authorName} size="sm" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex items-baseline gap-2">
+          <span className="truncate text-sm font-semibold text-ink">
+            {own ? "You" : message.authorName}
+          </span>
+          <span
+            suppressHydrationWarning
+            className="shrink-0 text-xs text-ink-faint"
+          >
+            {formatTime(message.createdAt)}
+          </span>
+        </div>
+        <div className="rounded-lg border border-sage/50 bg-sage-soft/50 px-3.5 py-3">
+          <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-primary">
+            <HandHeart size={13} aria-hidden /> Prayer
+          </p>
+          <p className="whitespace-pre-wrap break-words font-serif text-[0.98rem] leading-relaxed text-ink">
+            {message.body}
+          </p>
+          <p className="mt-2 text-xs italic text-ink-faint">
+            Shared by {own ? "you" : message.authorName} · composed with Round
           </p>
         </div>
       </div>

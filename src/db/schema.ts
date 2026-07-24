@@ -778,3 +778,44 @@ export const agentLogs = pgTable("agent_logs", {
     .notNull()
     .defaultNow(),
 });
+
+// --- Saved prayers (Step 26) ----------------------------------------------
+//
+// The Prayer tab's personal, private prayers. A prayer is generated from the
+// user's OWN material (onboarding answers, their reflections and highlights,
+// today's reading) or from a free-text request, shown only to the requester,
+// and saved here when they keep it — Path A only. Path B (Instant Access)
+// prayers live in sessionStorage for the browser session and are never
+// written here, per the no-anon-row rule (brief §7).
+//
+// Sharing a prayer to the circle does NOT go through this table: the shared,
+// recast intercessory version is posted as a member-authored `messages` row
+// (kind = "shared_prayer") after passing the Escalation gate — see Step 26.
+export const savedPrayers = pgTable(
+  "saved_prayers",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** "daily" (prayer for the day) or "custom" (from a typed request). */
+    mode: text("mode").notNull().default("daily"),
+    /** Short label for the list row — the request, or the reading label. */
+    title: text("title"),
+    /** The prayer text, first-person singular. Immutable once saved. */
+    body: text("body").notNull(),
+    /** USFM reference of the day's reading a daily prayer drew on; else null. */
+    readingReference: text("reading_reference"),
+    /** ISO 639-1 language the prayer was generated in. */
+    language: text("language"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // The tab lists a user's prayers, newest first.
+    index("saved_prayers_user_created_idx").on(table.userId, table.createdAt),
+  ],
+);
