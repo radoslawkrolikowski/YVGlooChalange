@@ -42,7 +42,12 @@ export default async function CircleThreadPage({
   ]);
   if (!circle || !member) redirect("/circles");
 
-  const initialMessages = await loadThreadMessages(circleId);
+  // Render in the reader's own language: attach their cached translations
+  // (Step 27). A reader without a set language sees every message in original.
+  const initialMessages = await loadThreadMessages(
+    circleId,
+    session.user.language,
+  );
 
   // Resolve the reflection day only for a well-formed, real plan day.
   let reflectionDay: CirclePlanDay | null = null;

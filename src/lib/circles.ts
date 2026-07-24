@@ -15,6 +15,7 @@ import {
   circles,
   conversationStarters,
   digests,
+  messageTranslations,
   messages,
   planDays,
   plans,
@@ -241,8 +242,16 @@ export async function canAttachPlan(
 
 // --- Circle thread (Step 17) ----------------------------------------------
 
-/** One posted message as the thread renders it — the original body only.
- * Translations (message_translations) are additive and land in Step 25. */
+/** A message's translation for the requesting reader (Step 27). */
+export interface ThreadTranslation {
+  /** The translated text, in the reader's language — additive; original kept. */
+  body: string;
+  /** The reader's language this was translated into, ISO 639-1. */
+  targetLanguage: string;
+}
+
+/** One posted message as the thread renders it. The original `body` is always
+ * present and immutable; `translation` (Step 27) is additive and reader-specific. */
 export interface ThreadMessage {
   id: string;
   /** The member who posted, or null on Round's system posts (Step 20). */
@@ -273,6 +282,16 @@ export interface ThreadMessage {
   questions: string[] | null;
   /** The structured digest on a "digest" post (Step 24); null otherwise. */
   digest: ThreadDigest | null;
+  /** The reader's-language translation (Step 27), when the reader's language
+   * differs from this member-authored message's source and one is cached. Null
+   * on system posts, same-language messages, and while a translation is still
+   * pending. The UI shows it with a "Translated by Round" label and a "Show
+   * original" toggle back to `body`. */
+  translation: ThreadTranslation | null;
+  /** True when a translation into the reader's language is expected but not yet
+   * cached — the row shows `body` with a subtle "Translating…" badge until the
+   * next poll swaps in the translation (Decisions → asynchronous timing). */
+  translationPending: boolean;
   /** ISO timestamp — the client formats the relative label and date separators. */
   createdAt: string;
 }
@@ -346,9 +365,18 @@ function threadKind(kind: string): ThreadMessage["kind"] {
  * Step 22 icebreaker, the Step 24 digest) have no author row. Starters carry
  * their replyable question list from conversation_starters; digests carry their
  * structured parts from the digests table — both joined on messageId.
+ *
+ * Step 27: pass `readerLanguage` (the requesting member's preferred language)
+ * to attach that reader's translation. A left join brings in the cached
+ * message_translations row for that one target language; a member-authored
+ * message whose source differs from the reader either carries the translation
+ * (cached) or is marked `translationPending` (async run not finished). System
+ * posts and same-language messages carry neither. Omit `readerLanguage` (e.g.
+ * server-side seeds) and every row renders in its original with no translation.
  */
 export async function loadThreadMessages(
   circleId: string,
+  readerLanguage?: string | null,
 ): Promise<ThreadMessage[]> {
   const rows = await db
     .select({
@@ -366,6 +394,7 @@ export async function loadThreadMessages(
       digestOverlapTheme: digests.overlapTheme,
       digestQuestion: digests.question,
       digestSummary: digests.summary,
+      translationBody: messageTranslations.body,
       createdAt: messages.createdAt,
     })
     .from(messages)
@@ -375,11 +404,34 @@ export async function loadThreadMessages(
       eq(conversationStarters.messageId, messages.id),
     )
     .leftJoin(digests, eq(digests.messageId, messages.id))
+    // Only join a translation when a reader language is given — and only that
+    // one target, so each row carries at most this reader's translation.
+    .leftJoin(
+      messageTranslations,
+      readerLanguage
+        ? and(
+            eq(messageTranslations.messageId, messages.id),
+            eq(messageTranslations.targetLanguage, readerLanguage),
+          )
+        : sql`false`,
+    )
     .where(eq(messages.circleId, circleId))
     .orderBy(asc(messages.createdAt));
 
   return rows.map((row) => {
     const kind = threadKind(row.kind);
+    // Translation applies only to member-authored posts read by someone whose
+    // language differs from the source (brief §5.12). System posts (authorId
+    // null) are never translated after the fact — Step 28 generates those
+    // per-language instead.
+    const translatable =
+      Boolean(readerLanguage) &&
+      row.authorId !== null &&
+      row.sourceLanguage !== readerLanguage;
+    const translation =
+      translatable && row.translationBody
+        ? { body: row.translationBody, targetLanguage: readerLanguage! }
+        : null;
     return {
       id: row.id,
       authorId: row.authorId,
@@ -405,6 +457,10 @@ export async function loadThreadMessages(
               summary: row.digestSummary,
             }
           : null,
+      translation,
+      // Expected but not yet cached → the row shows the original + a
+      // "Translating…" badge until the next poll swaps in the translation.
+      translationPending: translatable && !row.translationBody,
       createdAt: row.createdAt.toISOString(),
     };
   });

@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { db } from "@/db";
 import { messages } from "@/db/schema";
 import { loadUserCircle } from "@/lib/circles";
 import { screenReflection } from "@/lib/escalation";
 import { resolveSession } from "@/lib/session";
+import { translateNewMessage } from "@/lib/translation";
 
 export const dynamic = "force-dynamic";
 
@@ -73,13 +74,20 @@ export async function POST(request: Request) {
     );
   }
 
-  await db.insert(messages).values({
-    circleId: circle.id,
-    authorId: session.userId,
-    body: text,
-    sourceLanguage: session.language ?? null,
-    kind: "shared_prayer",
-  });
+  const [shared] = await db
+    .insert(messages)
+    .values({
+      circleId: circle.id,
+      authorId: session.userId,
+      body: text,
+      sourceLanguage: session.language ?? null,
+      kind: "shared_prayer",
+    })
+    .returning({ id: messages.id });
+
+  // Member-authored, so it translates like any message (Step 27): async, after
+  // the response, so the Gloo fan-out never blocks the share.
+  after(() => translateNewMessage(shared.id));
 
   return NextResponse.json({ ok: true, flagged: false, circleId: circle.id });
 }

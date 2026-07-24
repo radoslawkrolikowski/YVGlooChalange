@@ -1,6 +1,13 @@
 "use client";
 
-import { ChevronDown, CornerDownRight, HandHeart, X } from "lucide-react";
+import {
+  ChevronDown,
+  CornerDownRight,
+  HandHeart,
+  Languages,
+  Loader2,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Avatar, AvatarChip, Banner, RoundAvatar, SupportCard } from "@/components/ui";
@@ -345,6 +352,62 @@ function DateSeparator({ iso }: { iso: string }) {
   );
 }
 
+/**
+ * A message body with its Step 27 translation state. For the reader whose
+ * language differs from the source, a cached translation renders in their
+ * language with a quiet "Translated by Round" label and a "Show original"
+ * toggle back to the author's exact words; a not-yet-cached translation shows
+ * the original with a subtle "Translating…" badge that the next poll clears.
+ * A reader's own messages, same-language messages, and Round's system posts
+ * carry no translation and render the original untouched.
+ */
+function TranslatedBody({
+  message,
+  own,
+  className,
+}: {
+  message: ThreadMessage;
+  own: boolean;
+  /** Classes for the text paragraph, so each row keeps its own type styling. */
+  className: string;
+}) {
+  const [showOriginal, setShowOriginal] = useState(false);
+  // Never translate a reader's own words back to them.
+  const translation = own ? null : message.translation;
+  const pending = !own && message.translationPending;
+  const showingTranslation = translation !== null && !showOriginal;
+  const text = showingTranslation ? translation.body : message.body;
+
+  return (
+    <>
+      <p className={className}>{text}</p>
+
+      {translation && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-faint">
+          <span className="inline-flex items-center gap-1">
+            <Languages size={12} aria-hidden />
+            Translated by Round
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowOriginal((current) => !current)}
+            className="font-medium text-primary underline-offset-2 transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            {showOriginal ? "Show translation" : "Show original"}
+          </button>
+        </div>
+      )}
+
+      {pending && (
+        <p className="mt-1.5 inline-flex items-center gap-1 text-xs italic text-ink-faint">
+          <Loader2 size={11} aria-hidden className="animate-spin" />
+          Translating…
+        </p>
+      )}
+    </>
+  );
+}
+
 function MessageRow({ message, own }: { message: ThreadMessage; own: boolean }) {
   if (own) {
     // Own messages align right with no avatar — the reader knows who they are.
@@ -378,9 +441,11 @@ function MessageRow({ message, own }: { message: ThreadMessage; own: boolean }) 
           </span>
         </div>
         <div className="rounded-lg rounded-tl-sm border border-line bg-surface px-3.5 py-2.5">
-          <p className="whitespace-pre-wrap break-words text-[0.95rem] leading-relaxed text-ink">
-            {message.body}
-          </p>
+          <TranslatedBody
+            message={message}
+            own={false}
+            className="whitespace-pre-wrap break-words text-[0.95rem] leading-relaxed text-ink"
+          />
         </div>
       </div>
     </div>
@@ -420,9 +485,11 @@ function ReflectionRow({
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-widest text-primary">
             Reflection{message.dayLabel ? ` · ${message.dayLabel}` : ""}
           </p>
-          <p className="whitespace-pre-wrap break-words font-serif text-[0.98rem] leading-relaxed text-ink">
-            {message.body}
-          </p>
+          <TranslatedBody
+            message={message}
+            own={own}
+            className="whitespace-pre-wrap break-words font-serif text-[0.98rem] leading-relaxed text-ink"
+          />
         </div>
       </div>
     </div>
@@ -462,9 +529,11 @@ function SharedPrayerRow({
           <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-primary">
             <HandHeart size={13} aria-hidden /> Prayer
           </p>
-          <p className="whitespace-pre-wrap break-words font-serif text-[0.98rem] leading-relaxed text-ink">
-            {message.body}
-          </p>
+          <TranslatedBody
+            message={message}
+            own={own}
+            className="whitespace-pre-wrap break-words font-serif text-[0.98rem] leading-relaxed text-ink"
+          />
           <p className="mt-2 text-xs italic text-ink-faint">
             Shared by {own ? "you" : message.authorName} · composed with Round
           </p>

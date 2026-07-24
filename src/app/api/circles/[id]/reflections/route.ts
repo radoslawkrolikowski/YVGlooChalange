@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { isCircleMember, loadCirclePlanDay, loadThreadMessages } from "@/lib/circles";
 import { submitReflection } from "@/lib/reflections";
 import { GlooApiError } from "@/lib/gloo";
 import { resolveSession } from "@/lib/session";
+import { translateNewMessage } from "@/lib/translation";
 
 export const dynamic = "force-dynamic";
 
@@ -122,9 +123,16 @@ export async function POST(
       });
     }
 
+    // A reflection is member-authored content, so it is translated like any
+    // message (Step 27): async, post-response, so the Gloo fan-out never blocks.
+    if (result.messageId) {
+      const reflectionMessageId = result.messageId;
+      after(() => translateNewMessage(reflectionMessageId));
+    }
+
     // Unflagged: return the fresh thread so the poster sees their reflection
-    // immediately, without waiting for the next poll interval.
-    const messageList = await loadThreadMessages(circleId);
+    // immediately, without waiting for the next poll interval — in their language.
+    const messageList = await loadThreadMessages(circleId, session.language);
     return NextResponse.json({
       ok: true,
       flagged: false,

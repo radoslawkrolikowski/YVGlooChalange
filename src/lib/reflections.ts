@@ -46,6 +46,9 @@ export interface SubmitReflectionResult {
   flagged: boolean;
   /** Crisis resources for the private support card; empty when unflagged. */
   resources: CrisisResource[];
+  /** The thread message id of an UNFLAGGED reflection — the caller triggers the
+   * Translation Agent on it (Step 27). Null when flagged (never posted). */
+  messageId: string | null;
 }
 
 /**
@@ -82,7 +85,7 @@ export async function submitReflection(
 
   if (screen.verdict.flagged) {
     // Never posted to the thread. Private to the author + support card.
-    return { flagged: true, resources: screen.resources };
+    return { flagged: true, resources: screen.resources, messageId: null };
   }
 
   // Unflagged: post to the thread as a day-tagged reflection message, then
@@ -105,7 +108,7 @@ export async function submitReflection(
     .set({ messageId: message.id })
     .where(eq(reflections.id, reflectionId));
 
-  return { flagged: false, resources: [] };
+  return { flagged: false, resources: [], messageId: message.id };
 }
 
 /** A reflection this member already posted for a plan day. */
