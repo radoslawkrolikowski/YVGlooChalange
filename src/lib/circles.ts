@@ -263,7 +263,8 @@ export interface ThreadMessage {
     | "starters"
     | "icebreaker"
     | "digest"
-    | "companion";
+    | "companion"
+    | "shared_prayer";
   /** The plan day a reflection/starters/digest responds to; null otherwise. */
   dayNumber: number | null;
   /** Human-readable passage label for a reflection/starters/digest; else null. */
@@ -335,6 +336,7 @@ function threadKind(kind: string): ThreadMessage["kind"] {
   if (kind === "icebreaker") return "icebreaker";
   if (kind === "digest") return "digest";
   if (kind === "companion") return "companion";
+  if (kind === "shared_prayer") return "shared_prayer";
   return "message";
 }
 

@@ -19,6 +19,7 @@ const tabs = [
   { href: "/home", label: "Home", icon: HomeIcon },
   { href: "/plan", label: "My Plan", icon: BookIcon },
   { href: "/circles", label: "Circles", icon: CirclesIcon },
+  { href: "/prayer", label: "Prayer", icon: PrayerIcon },
   { href: "/profile", label: "Profile", icon: ProfileIcon },
 ] as const;
 
@@ -153,6 +154,17 @@ function ProfileIcon() {
     <svg {...iconProps}>
       <circle cx="12" cy="8" r="4" />
       <path d="M4.5 20.5c1.5-3.5 4.2-5 7.5-5s6 1.5 7.5 5" />
+    </svg>
+  );
+}
+
+function PrayerIcon() {
+  // Two hands joined in prayer.
+  return (
+    <svg {...iconProps}>
+      <path d="M12 3c-1 2.5-2.2 4-3.7 5.5C7 10 6.5 11 6.5 12.5V19c0 1 .8 2 2 2H12" />
+      <path d="M12 3c1 2.5 2.2 4 3.7 5.5C17 10 17.5 11 17.5 12.5V19c0 1-.8 2-2 2H12" />
+      <path d="M12 3v18" />
     </svg>
   );
 }

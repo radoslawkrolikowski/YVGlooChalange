@@ -286,3 +286,127 @@ export async function groundedCompletion(): Promise<never> {
     501,
   );
 }
+
+/** One text delta yielded by chatCompletionStream while the model generates. */
+export interface GlooStreamChunk {
+  /** The incremental text since the last chunk. */
+  delta: string;
+}
+
+/**
+ * Streaming Completions V2 (SSE) — added in Step 26 for the Prayer tab's
+ * "thinking effect", where the prayer streams in word by word as Gloo writes
+ * it. Yields text deltas as they arrive, then writes ONE agent_logs row on
+ * completion — the same discipline as chatCompletion(), just deferred to the
+ * end of the stream when the full text and model are known.
+ *
+ * Unlike chatCompletion(), a broken stream is NOT retried here: once bytes
+ * have started flowing a retry would double-emit. Callers that need a fallback
+ * do a single non-streamed chatCompletion() retry instead (see the Prayer
+ * route). A guardrail refusal mid-stream surfaces the same way as the
+ * non-streamed path: an empty model with canned content throws GlooGuardrailError.
+ */
+export async function* chatCompletionStream(
+  options: GlooCompletionOptions,
+): AsyncGenerator<GlooStreamChunk, void, unknown> {
+  const startedAt = Date.now();
+  const accessToken = await getAccessToken();
+
+  const body: Record<string, unknown> = {
+    messages: options.messages,
+    temperature: options.temperature,
+    max_tokens: options.maxTokens,
+    tradition: options.tradition,
+    stream: true,
+  };
+  if (options.model) {
+    body.model = options.model;
+  } else {
+    body.auto_routing = true;
+  }
+
+  let model = "";
+  let full = "";
+  try {
+    const response = await fetch(COMPLETIONS_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok || !response.body) {
+      const responseBody = response.ok ? "" : await response.text();
+      if (response.status === 401) cachedToken = null;
+      throw new GlooApiError(
+        `Gloo streaming completion failed (${response.status})`,
+        response.status,
+        responseBody,
+      );
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let done = false;
+    while (!done) {
+      const { value, done: streamDone } = await reader.read();
+      if (streamDone) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // SSE frames are separated by a blank line; keep the trailing partial.
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+      for (const frame of frames) {
+        const line = frame
+          .split("\n")
+          .find((l) => l.startsWith("data:"));
+        if (!line) continue;
+        const payload = line.slice(5).trim();
+        if (payload === "[DONE]") {
+          done = true;
+          break;
+        }
+        let parsed: {
+          model?: string;
+          choices?: Array<{ delta?: { content?: string } }>;
+        };
+        try {
+          parsed = JSON.parse(payload);
+        } catch {
+          continue; // ignore keep-alive comments / malformed frames
+        }
+        if (parsed.model) model = parsed.model;
+        const delta = parsed.choices?.[0]?.delta?.content;
+        if (delta) {
+          full += delta;
+          yield { delta };
+        }
+      }
+    }
+
+    // Same guardrail tell as the non-streamed path: content but no model routed.
+    if (!model && full) {
+      throw new GlooGuardrailError(full);
+    }
+
+    await writeAgentLog({
+      agentName: options.agentName,
+      model: model || null,
+      status: "ok",
+      outputPreview: full.slice(0, OUTPUT_PREVIEW_CHARS),
+      latencyMs: Date.now() - startedAt,
+    });
+  } catch (error) {
+    await writeAgentLog({
+      agentName: options.agentName,
+      model: model || (options.model ?? null),
+      status: error instanceof GlooGuardrailError ? "blocked" : "error",
+      error: error instanceof Error ? error.message : String(error),
+      latencyMs: Date.now() - startedAt,
+    });
+    throw error;
+  }
+}
