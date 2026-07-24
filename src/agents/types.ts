@@ -26,7 +26,8 @@ export type AgentName =
   | "context"
   | "health"
   | "flashcard"
-  | "memory";
+  | "memory"
+  | "circle-bot";
 
 /** A successful run: the agent produced real output via Gloo. */
 export interface AgentRunOk<Output> {

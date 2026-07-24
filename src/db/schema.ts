@@ -55,6 +55,13 @@ export const users = pgTable("users", {
   language: text("language"),
   /** Preferred YouVersion Bible version ID, e.g. NVI's numeric ID. */
   bibleVersionId: integer("bible_version_id"),
+  // Step 30: an AI/demo account, not a real person. The seeded public-circle
+  // members (the live-responding Circle Bot and the static demo persona) carry
+  // this flag. It excludes them from user-targeting sweeps (Reminder, and later
+  // Health/answered-detection) — a bot must never receive a reminder or nudge —
+  // and marks them as system content in the codebase. A real signed-in user is
+  // always false.
+  isBot: boolean("is_bot").notNull().default(false),
   // Onboarding profile answers (Step 10) — all nullable/defaulted until the
   // user answers; chip values come from src/config/profile.ts (the controlled
   // vocabulary shared with circle matching and the PlanBuilder fallback pool).
@@ -339,6 +346,14 @@ export const circles = pgTable("circles", {
     .references(() => plans.id),
   /** forming / active / stalled / archived — see the table comment. */
   state: text("state").notNull().default("forming"),
+  // Step 30: "standard" is an ordinary matched member circle; "public" is the
+  // singleton demo circle ("Public Round Circle — Psalms") any Instant Access
+  // session may join in one tap. The public kind is EXCLUDED from the matching
+  // pool, from the size < 5 cap (it is unbounded), and from the Health sweep
+  // (its many departed anonymous members would otherwise read as "silent").
+  // The Facilitator/Summary/Companion sweeps DO run on it, so its AI content
+  // is genuinely regenerated, not frozen seed data.
+  kind: text("kind").notNull().default("standard"),
   /** The founding member; kept for attribution, membership lives below. */
   createdBy: text("created_by")
     .notNull()
@@ -408,13 +423,22 @@ export const messages = pgTable(
     circleId: text("circle_id")
       .notNull()
       .references(() => circles.id, { onDelete: "cascade" }),
-    /** The member who posted — Path A only in Step 17 (no anon circle rows).
-     * NULL on system-attributed posts (Step 20): starters, and later the
-     * icebreaker (22), digest (24), and summary (25) are authored by "Round",
-     * not by any member, so they have no users row to point at. */
+    /** The member who posted. NULL on system-attributed posts (Step 20):
+     * starters, icebreaker (22), digest (24), summary (25), companion (24A)
+     * are authored by "Round", not a member. ALSO null on Step 30 anonymous
+     * posts in the public circle — those carry `anonName` instead (an
+     * Instant Access visitor has no users row, brief §7). A post is therefore
+     * a system "Round" post iff authorId AND anonSessionId are both null. */
     authorId: text("author_id").references(() => users.id, {
       onDelete: "cascade",
     }),
+    // Step 30: an anonymous Instant Access author in the public circle. Both
+    // null on member (authorId set) and system (Round) posts. The session id
+    // is the pruning key (Step 31); the name is the "Reader #n" shown in the
+    // thread. Kept on the row (not derived) because the anon session has no
+    // database row to join to.
+    anonSessionId: text("anon_session_id"),
+    anonName: text("anon_name"),
     /** The author's original words, immutable — never overwritten. */
     body: text("body").notNull(),
     /** ISO 639-1 code of the original's language; null when unknown. */
@@ -553,9 +577,17 @@ export const reflections = pgTable(
     circleId: text("circle_id")
       .notNull()
       .references(() => circles.id, { onDelete: "cascade" }),
-    authorId: text("author_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    // Step 30 relaxes this to nullable: an anonymous Instant Access visitor
+    // reflecting in the public circle has no users row (brief §7), so their
+    // reflection carries `anonSessionId`/`anonName` instead. Member reflections
+    // still set authorId. A reflection is anonymous iff authorId is null.
+    authorId: text("author_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    /** Step 30: the anonymous author's session id (pruning key, Step 31) and
+     * "Reader #n" name, set only on anonymous reflections (authorId null). */
+    anonSessionId: text("anon_session_id"),
+    anonName: text("anon_name"),
     /** 1-based plan day this reflection responds to. */
     dayNumber: integer("day_number").notNull(),
     /** USFM passage reference of that day, e.g. "PSA.23". */

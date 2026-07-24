@@ -9,9 +9,10 @@
 // so in this step a sweep's only write is the claim row, which is exactly
 // what makes the idempotency provable in isolation.
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { agentRuns, circles, userPlanProgress } from "@/db/schema";
+import { agentRuns, circles, userPlanProgress, users } from "@/db/schema";
+import { CIRCLE_KIND_PUBLIC } from "@/lib/circles";
 import { dailyPeriodKey, halfDayPeriodKey } from "@/lib/cron";
 import { runCircleCompanion } from "@/lib/companion";
 import { runCircleDigest } from "@/lib/digest";
@@ -152,10 +153,13 @@ export async function facilitatorSweep(): Promise<SweepResult> {
  */
 export async function reminderSweep(): Promise<SweepResult> {
   const periodKey = dailyPeriodKey();
+  // Bots (the seeded demo members, Step 30) are excluded: a bot has plan
+  // progress but must never receive a reminder.
   const eligible = await db
     .select({ userId: userPlanProgress.userId })
     .from(userPlanProgress)
-    .where(eq(userPlanProgress.isActive, true));
+    .innerJoin(users, eq(users.id, userPlanProgress.userId))
+    .where(and(eq(userPlanProgress.isActive, true), eq(users.isBot, false)));
 
   const targets: SweepTarget[] = [];
   for (const { userId } of eligible) {
@@ -198,10 +202,12 @@ export async function reminderSweep(): Promise<SweepResult> {
  */
 export async function healthSweep(): Promise<SweepResult> {
   const periodKey = halfDayPeriodKey();
+  // The public demo circle (Step 30) is excluded: its many departed anonymous
+  // members would read as "silent", and it must never be merged or archived.
   const eligible = await db
     .select({ id: circles.id })
     .from(circles)
-    .where(eq(circles.state, "active"));
+    .where(and(eq(circles.state, "active"), ne(circles.kind, CIRCLE_KIND_PUBLIC)));
   const targets = await claimAll(
     "health",
     periodKey,

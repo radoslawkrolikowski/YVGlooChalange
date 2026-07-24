@@ -26,7 +26,13 @@ import type { CrisisResource } from "@/config/crisis-resources";
 
 export interface SubmitReflectionInput {
   circleId: string;
-  authorId: string;
+  /** The member author (Path A), or null for an anonymous public-circle
+   * reflection (Step 30) — then anonSessionId/anonName carry the identity. */
+  authorId: string | null;
+  /** Step 30: the anonymous author's session id + "Reader #n" name, set only
+   * on anonymous reflections (authorId null). Both null for members. */
+  anonSessionId?: string | null;
+  anonName?: string | null;
   /** Best-effort source language from the author's profile (Step 25 detects). */
   sourceLanguage: string | null;
   /** The plan day this reflection responds to. */
@@ -75,6 +81,8 @@ export async function submitReflection(
     id: reflectionId,
     circleId: input.circleId,
     authorId: input.authorId,
+    anonSessionId: input.anonSessionId ?? null,
+    anonName: input.anonName ?? null,
     dayNumber: input.dayNumber,
     reference: input.reference,
     label: input.label,
@@ -95,6 +103,8 @@ export async function submitReflection(
     .values({
       circleId: input.circleId,
       authorId: input.authorId,
+      anonSessionId: input.anonSessionId ?? null,
+      anonName: input.anonName ?? null,
       body: input.body,
       sourceLanguage: input.sourceLanguage,
       kind: "reflection",

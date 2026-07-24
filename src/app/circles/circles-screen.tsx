@@ -39,9 +39,32 @@ export function CirclesScreen({
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
   const [switchPrompt, setSwitchPrompt] = useState<PlanSwitchPrompt | null>(
     null,
   );
+
+  /** Leave the current circle so another can be joined. The browse list then
+   * shows every open circle — the public demo circle among them. */
+  async function leave(circleId: string) {
+    setLeaving(true);
+    setNotice(null);
+    try {
+      const response = await fetch(`/api/circles/${circleId}/leave`, {
+        method: "POST",
+      });
+      const body = await response.json();
+      if (body.ok) {
+        await refresh();
+      } else {
+        setNotice(body.error ?? "Could not leave this circle.");
+      }
+    } catch {
+      setNotice("Could not leave this circle.");
+    } finally {
+      setLeaving(false);
+    }
+  }
 
   async function refresh() {
     const response = await fetch("/api/circles");
@@ -97,8 +120,16 @@ export function CirclesScreen({
 
       {notice && <Banner tone="warning">{notice}</Banner>}
 
-      {/* Hero: the user's own circle, once joined. */}
-      {circle && <CircleHero circle={circle} />}
+      {/* Hero: the user's own circle, once joined. Leaving frees the reader to
+          join another circle from the browse list below (the public demo circle
+          among them). */}
+      {circle && (
+        <CircleHero
+          circle={circle}
+          leaving={leaving}
+          onLeave={() => void leave(circle.id)}
+        />
+      )}
 
       {/* The three ways in (Step 21 adds matching): let Round match you — the
           screen's one primary action — start your own, or browse below. */}
@@ -172,7 +203,16 @@ export function CirclesScreen({
 }
 
 /** The user's own circle as the screen's hero — roster shows names only. */
-function CircleHero({ circle }: { circle: UserCircle }) {
+function CircleHero({
+  circle,
+  leaving,
+  onLeave,
+}: {
+  circle: UserCircle;
+  leaving: boolean;
+  onLeave: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
   return (
     <Card variant="elevated" className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
@@ -203,6 +243,42 @@ function CircleHero({ circle }: { circle: UserCircle }) {
       <ButtonLink href={`/circles/${circle.id}`} full>
         Open Circle
       </ButtonLink>
+
+      {/* Leave — behind a confirm, since it drops the reader from the circle
+          (they can then join another from the browse list below). */}
+      {confirming ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-line bg-surface px-3 py-3">
+          <p className="text-sm text-ink-soft">
+            Leave {circle.name}? You can join another circle afterwards.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="destructive"
+              full
+              disabled={leaving}
+              onClick={onLeave}
+            >
+              {leaving ? "Leaving…" : "Leave circle"}
+            </Button>
+            <Button
+              variant="secondary"
+              full
+              disabled={leaving}
+              onClick={() => setConfirming(false)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="self-center text-sm font-medium text-ink-faint underline-offset-4 transition-colors hover:text-ink-soft hover:underline"
+        >
+          Leave circle
+        </button>
+      )}
     </Card>
   );
 }

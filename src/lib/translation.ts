@@ -33,7 +33,7 @@
 // "never re-translate the same target" structural; an existence check skips the
 // Gloo call, and onConflictDoNothing makes a concurrent double-run harmless.
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import { detectLanguage, translateText } from "@/agents/translation";
 import { db } from "@/db";
 import { circleMembers, messageTranslations, messages, users } from "@/db/schema";
@@ -144,14 +144,20 @@ export async function translateNewMessage(messageId: string): Promise<void> {
       id: messages.id,
       circleId: messages.circleId,
       authorId: messages.authorId,
+      anonName: messages.anonName,
       body: messages.body,
       sourceLanguage: messages.sourceLanguage,
     })
     .from(messages)
     .where(eq(messages.id, messageId));
 
-  // Missing row or a system/AI-authored post: nothing for this agent to do.
-  if (!message || message.authorId === null) return;
+  // Missing row, or a system/AI-authored "Round" post (no member author AND no
+  // anonymous author): nothing for this agent to do. Step 30 anonymous
+  // public-circle posts (authorId null, anonName set) ARE member-authored
+  // content and are translated like any member message.
+  if (!message || (message.authorId === null && message.anonName === null)) {
+    return;
+  }
 
   // Detect the true source and refine the row's best-effort Step 17 guess
   // (metadata only — the author's words are never touched).
@@ -194,6 +200,85 @@ export async function translateNewMessage(messageId: string): Promise<void> {
       // original in the meantime.
       console.error(
         `translation failed for message ${messageId} → ${targetLanguage}`,
+        error,
+      );
+    }
+  }
+}
+
+/** How many recent member-authored messages a reader-language backfill covers. */
+const READER_BACKFILL_LIMIT = 40;
+
+/**
+ * Ensure a reader can read a circle's member-authored thread in THEIR language
+ * (Step 30). translateNewMessage fans out only to circle-MEMBER languages, so a
+ * reader whose language is not among the members — in practice an anonymous
+ * Instant Access visitor reading the public circle in Spanish/Portuguese — would
+ * otherwise never get a translation and sit on a permanent "Translating…" badge.
+ * Called via `after()` from the thread GET: for each recent member-authored
+ * message (member OR anonymous author) whose source differs from the reader's
+ * language and that lacks a cached translation, translate it once. Idempotent
+ * (cache + onConflictDoNothing) and best-effort — a failure just leaves the next
+ * poll to retry. No-op when the reader has no language set.
+ */
+export async function ensureReaderTranslations(
+  circleId: string,
+  readerLanguage: string | null,
+): Promise<void> {
+  if (!readerLanguage) return;
+
+  const rows = await db
+    .select({
+      id: messages.id,
+      body: messages.body,
+      sourceLanguage: messages.sourceLanguage,
+    })
+    .from(messages)
+    .leftJoin(
+      messageTranslations,
+      and(
+        eq(messageTranslations.messageId, messages.id),
+        eq(messageTranslations.targetLanguage, readerLanguage),
+      ),
+    )
+    .where(
+      and(
+        eq(messages.circleId, circleId),
+        // Member-authored only: a real member OR an anonymous author. System
+        // "Round" posts (both null) are handled by Step 28 variants, not here.
+        or(isNotNull(messages.authorId), isNotNull(messages.anonName)),
+        // Only rows without a cached translation for this reader's language.
+        isNull(messageTranslations.messageId),
+      ),
+    )
+    .orderBy(desc(messages.createdAt))
+    .limit(READER_BACKFILL_LIMIT);
+
+  for (const row of rows) {
+    // Detect the true source for rows whose source is still unknown/best-effort,
+    // so a translation is never requested from a wrong source language.
+    const source = await detectSourceLanguage(row.body, row.sourceLanguage);
+    if (source === readerLanguage) continue;
+    try {
+      const { output, model } = await translateText({
+        text: row.body,
+        sourceLanguage: source,
+        targetLanguage: readerLanguage,
+      });
+      await db
+        .insert(messageTranslations)
+        .values({
+          messageId: row.id,
+          targetLanguage: readerLanguage,
+          body: output.text,
+          model,
+        })
+        .onConflictDoNothing({
+          target: [messageTranslations.messageId, messageTranslations.targetLanguage],
+        });
+    } catch (error) {
+      console.error(
+        `reader-language backfill failed for ${row.id} → ${readerLanguage}`,
         error,
       );
     }

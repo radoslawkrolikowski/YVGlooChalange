@@ -49,6 +49,7 @@ export function CircleThread({
   initialMessages,
   reflectionDay,
   alreadyReflected = false,
+  anonToken,
 }: {
   circle: ThreadCircle;
   currentUserId: string;
@@ -57,6 +58,10 @@ export function CircleThread({
   reflectionDay: CirclePlanDay | null;
   /** This member already reflected on that day — allowed, but said out loud. */
   alreadyReflected?: boolean;
+  /** Step 30: an anonymous Instant Access token, sent as the session header on
+   * every request so a Path B visitor can read/post in the public circle. Unset
+   * for signed-in members, who authenticate by cookie. */
+  anonToken?: string;
 }) {
   const [messages, setMessages] = useState<ThreadMessage[]>(initialMessages);
   const [draft, setDraft] = useState("");
@@ -80,15 +85,29 @@ export function CircleThread({
     initialMessages.at(-1)?.id,
   );
 
+  // Anonymous sessions authenticate by the session header (Step 30); members by
+  // cookie. jsonHeaders adds Content-Type for POSTs.
+  const authHeaders = useCallback(
+    (json = false): Record<string, string> => {
+      const headers: Record<string, string> = {};
+      if (json) headers["Content-Type"] = "application/json";
+      if (anonToken) headers["x-round-session"] = anonToken;
+      return headers;
+    },
+    [anonToken],
+  );
+
   const fetchMessages = useCallback(async () => {
     try {
-      const response = await fetch(`/api/circles/${circle.id}/messages`);
+      const response = await fetch(`/api/circles/${circle.id}/messages`, {
+        headers: authHeaders(),
+      });
       const body = await response.json();
       if (body.ok) setMessages(body.messages as ThreadMessage[]);
     } catch {
       // A dropped poll is harmless — the next interval retries.
     }
-  }, [circle.id]);
+  }, [circle.id, authHeaders]);
 
   // Poll every 10s while visible; pause when the tab is hidden, resume (with an
   // immediate fetch) when it returns to the foreground.
@@ -140,7 +159,7 @@ export function CircleThread({
       try {
         const response = await fetch(`/api/circles/${circle.id}/messages`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders(true),
           body: JSON.stringify({ body: text }),
         });
         const result = await response.json();
@@ -165,7 +184,7 @@ export function CircleThread({
     try {
       const response = await fetch(`/api/circles/${circle.id}/reflections`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(true),
         body: JSON.stringify({ body: text, dayNumber: reflectionDay.dayNumber }),
       });
       const result = await response.json();

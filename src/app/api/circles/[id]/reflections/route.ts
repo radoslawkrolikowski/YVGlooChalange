@@ -1,27 +1,46 @@
 import { after, NextResponse } from "next/server";
-import { isCircleMember, loadCirclePlanDay, loadThreadMessages } from "@/lib/circles";
+import { maybeBotReply } from "@/lib/circle-bot";
+import {
+  isCircleMember,
+  isPublicCircle,
+  loadCirclePlanDay,
+  loadThreadMessages,
+} from "@/lib/circles";
 import { submitReflection } from "@/lib/reflections";
 import { GlooApiError } from "@/lib/gloo";
-import { resolveSession } from "@/lib/session";
+import { resolveSession, type Session } from "@/lib/session";
 import { translateNewMessage } from "@/lib/translation";
 
 export const dynamic = "force-dynamic";
 
-// Step 19: reflection submission through the Escalation gate (Path A only).
+// Step 19: reflection submission through the Escalation gate. Step 30 opens it
+// to anonymous Instant Access sessions for the PUBLIC demo circle only.
 //
 // POST appends one reflection for a plan day. The Escalation Agent runs first,
 // synchronously, inside submitReflection() — before anything is stored or
 // posted. Unflagged reflections post to the thread as a day-tagged reflection
-// card and the fresh thread is returned; flagged ones are stored privately
-// (never posted) and the response carries the crisis resources for the
-// author's support card, with no trace in the returned thread. Circles are a
-// signed-in feature: anonymous Instant Access sessions join the demo circle in
-// Step 30, so only a member with a YouVersion account may reflect here.
+// card; flagged ones are stored privately (never posted) and the response
+// carries the crisis resources for the author's support card. A member reflects
+// in their own circle; an anonymous session reflects in the public circle,
+// tagged with its session id + "Reader #n" name (brief §7 — no users row).
 
 const MAX_BODY_LENGTH = 4000;
 
-/** Resolve the requester and confirm they may touch this circle's thread. */
-async function requireMember(request: Request, circleId: string) {
+/** The author identity to stamp on a reflection, derived from the session. */
+interface ReflectionAuthor {
+  authorId: string | null;
+  anonSessionId: string | null;
+  anonName: string | null;
+  language: string | null;
+}
+
+async function requireThreadAccess(
+  request: Request,
+  circleId: string,
+): Promise<
+  | { error: NextResponse }
+  | { session: Session; author: ReflectionAuthor }
+> {
   const session = await resolveSession(request);
   if (!session) {
     return {
@@ -31,7 +50,28 @@ async function requireMember(request: Request, circleId: string) {
       ),
     };
   }
-  if (session.kind !== "user") {
+
+  if (session.kind === "user") {
+    if (!(await isCircleMember(session.userId, circleId))) {
+      return {
+        error: NextResponse.json(
+          { ok: false, error: "You are not a member of this circle" },
+          { status: 403 },
+        ),
+      };
+    }
+    return {
+      session,
+      author: {
+        authorId: session.userId,
+        anonSessionId: null,
+        anonName: null,
+        language: session.language,
+      },
+    };
+  }
+
+  if (!(await isPublicCircle(circleId))) {
     return {
       error: NextResponse.json(
         { ok: false, error: "Circles require a YouVersion account" },
@@ -39,15 +79,15 @@ async function requireMember(request: Request, circleId: string) {
       ),
     };
   }
-  if (!(await isCircleMember(session.userId, circleId))) {
-    return {
-      error: NextResponse.json(
-        { ok: false, error: "You are not a member of this circle" },
-        { status: 403 },
-      ),
-    };
-  }
-  return { session };
+  return {
+    session,
+    author: {
+      authorId: null,
+      anonSessionId: session.sessionId,
+      anonName: session.displayName,
+      language: session.language,
+    },
+  };
 }
 
 export async function POST(
@@ -55,9 +95,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: circleId } = await params;
-  const guard = await requireMember(request, circleId);
-  if (guard.error) return guard.error;
-  const { session } = guard;
+  const access = await requireThreadAccess(request, circleId);
+  if ("error" in access) return access.error;
+  const { session, author } = access;
 
   let body: Record<string, unknown>;
   try {
@@ -105,8 +145,10 @@ export async function POST(
   try {
     const result = await submitReflection({
       circleId,
-      authorId: session.userId,
-      sourceLanguage: session.language ?? null,
+      authorId: author.authorId,
+      anonSessionId: author.anonSessionId,
+      anonName: author.anonName,
+      sourceLanguage: author.language ?? null,
       dayNumber: day.dayNumber,
       reference: day.reference,
       label: day.label,
@@ -125,9 +167,11 @@ export async function POST(
 
     // A reflection is member-authored content, so it is translated like any
     // message (Step 27): async, post-response, so the Gloo fan-out never blocks.
+    // The public circle's bot member may also reply to it (Step 30).
     if (result.messageId) {
       const reflectionMessageId = result.messageId;
       after(() => translateNewMessage(reflectionMessageId));
+      after(() => maybeBotReply(circleId, reflectionMessageId));
     }
 
     // Unflagged: return the fresh thread so the poster sees their reflection

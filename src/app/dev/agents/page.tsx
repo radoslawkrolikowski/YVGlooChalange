@@ -6,6 +6,7 @@ import { agentRuns } from "@/db/schema";
 import { devToolingEnabled } from "@/lib/dev-gate";
 import { AgentConsole, type ConsoleAgent } from "./agent-console";
 import { CronConsole, type ConsoleCronJob } from "./cron-console";
+import { DemoSeedControl } from "./demo-seed-control";
 
 export const dynamic = "force-dynamic";
 
@@ -126,6 +127,10 @@ export default async function AgentConsolePage() {
         Scheduled sweeps
       </h2>
       <CronConsole jobs={consoleCronJobs} />
+      <h2 className="mb-3 mt-8 font-serif text-xl font-semibold tracking-tight text-ink">
+        Demo circle
+      </h2>
+      <DemoSeedControl />
       <h2 className="mb-3 mt-8 font-serif text-xl font-semibold tracking-tight text-ink">
         Agents
       </h2>

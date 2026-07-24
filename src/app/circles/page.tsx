@@ -16,7 +16,8 @@ export default async function CirclesPage() {
   if (session?.user) {
     const [circle, open] = await Promise.all([
       loadUserCircle(session.user.id),
-      listOpenCircles(session.user.id),
+      // includePublic: the demo circle is offered as a normal browse option.
+      listOpenCircles(session.user.id, true),
     ]);
     return (
       <AppShell
