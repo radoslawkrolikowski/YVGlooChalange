@@ -157,9 +157,13 @@ async function loadDayReflections(
   const distinctAuthors = new Set<string>();
   const nameByAuthor = new Map<string, string>();
   const entries = rows.map((row) => {
-    distinctAuthors.add(row.authorId);
+    // The inner join on users guarantees a non-null authorId here — anonymous
+    // reflections (authorId null, Step 30) are excluded from digest input by
+    // that join, so they never count toward the distinct-author threshold.
+    const authorId = row.authorId!;
+    distinctAuthors.add(authorId);
     const name = row.authorName ?? "Reader";
-    nameByAuthor.set(row.authorId, name);
+    nameByAuthor.set(authorId, name);
     return { authorDisplayName: name, text: row.body };
   });
   return {

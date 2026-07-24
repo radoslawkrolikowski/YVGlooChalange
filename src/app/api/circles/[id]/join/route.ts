@@ -9,6 +9,7 @@ import {
 } from "@/db/schema";
 import {
   alignActivePlan,
+  CIRCLE_KIND_PUBLIC,
   MAX_MEMBERS,
   MIN_MEMBERS,
   memberCount,
@@ -71,6 +72,7 @@ export async function POST(
     .select({
       id: circles.id,
       state: circles.state,
+      kind: circles.kind,
       planId: circles.planId,
       planName: plans.name,
     })
@@ -90,8 +92,10 @@ export async function POST(
     );
   }
 
+  // The public demo circle (Step 30) is unbounded — the five-member cap is a
+  // small-circle rule that does not apply to it.
   const count = await memberCount(circle.id);
-  if (count >= MAX_MEMBERS) {
+  if (circle.kind !== CIRCLE_KIND_PUBLIC && count >= MAX_MEMBERS) {
     return NextResponse.json(
       { ok: false, reason: "full", error: "This circle is full" },
       { status: 409 },

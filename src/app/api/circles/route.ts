@@ -40,7 +40,8 @@ export async function GET(request: Request) {
 
   const [circle, open] = await Promise.all([
     loadUserCircle(session.userId),
-    listOpenCircles(session.userId),
+    // includePublic: the demo circle is offered as a normal browse option.
+    listOpenCircles(session.userId, true),
   ]);
   return NextResponse.json({ ok: true, circle, open });
 }

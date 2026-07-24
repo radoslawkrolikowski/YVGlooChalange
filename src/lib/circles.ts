@@ -8,7 +8,7 @@
 // here — the members list carries display names only (no-comparison
 // constraint).
 
-import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   circleMembers,
@@ -28,7 +28,42 @@ import {
 export const MIN_MEMBERS = 2;
 export const MAX_MEMBERS = 5;
 
+/** circles.kind values (Step 30). "public" is the singleton demo circle. */
+export const CIRCLE_KIND_PUBLIC = "public";
+/** app_meta key holding the public circle's id once seeded (Step 30). */
+export const PUBLIC_CIRCLE_META_KEY = "public_circle_id";
+
 export type CircleState = "forming" | "active" | "stalled" | "archived";
+
+/** The public demo circle, resolved by kind. Null until Step 30 seeds it. */
+export async function loadPublicCircle(): Promise<{
+  id: string;
+  name: string;
+  planId: string;
+  state: CircleState;
+} | null> {
+  const [row] = await db
+    .select({
+      id: circles.id,
+      name: circles.name,
+      planId: circles.planId,
+      state: circles.state,
+    })
+    .from(circles)
+    .where(eq(circles.kind, CIRCLE_KIND_PUBLIC))
+    .orderBy(asc(circles.createdAt))
+    .limit(1);
+  return row ? { ...row, state: row.state as CircleState } : null;
+}
+
+/** True when this circle is the public demo circle (open to anon sessions). */
+export async function isPublicCircle(circleId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ kind: circles.kind })
+    .from(circles)
+    .where(eq(circles.id, circleId));
+  return row?.kind === CIRCLE_KIND_PUBLIC;
+}
 
 /** An open circle as shown in the browse list — never any member progress. */
 export interface CircleBrowseItem {
@@ -89,14 +124,23 @@ async function membersByCircle(
  * caller's own circle is excluded (it renders as the hero card instead).
  * Full circles simply drop out of the browse list; the join route still
  * refuses a full circle explicitly, so a stale card cannot slip past.
+ *
+ * `includePublic` (Step 30): the public demo circle is offered as a normal
+ * browse option to signed-in users (they leave their current circle, then join
+ * it like any other), so browse callers pass true. The matching candidate pool
+ * keeps the default (false) — Round never auto-matches anyone into the demo
+ * circle. The public circle is unbounded, so the MAX_MEMBERS "full" filter is
+ * not applied to it.
  */
 export async function listOpenCircles(
   excludeUserId?: string,
+  includePublic = false,
 ): Promise<CircleBrowseItem[]> {
   const rows = await db
     .select({
       id: circles.id,
       name: circles.name,
+      kind: circles.kind,
       planId: circles.planId,
       planName: plans.name,
       state: circles.state,
@@ -105,9 +149,17 @@ export async function listOpenCircles(
     .from(circles)
     .innerJoin(plans, eq(plans.id, circles.planId))
     .leftJoin(circleMembers, eq(circleMembers.circleId, circles.id))
-    .where(sql`${circles.state} in ('forming', 'active')`)
+    .where(
+      includePublic
+        ? sql`${circles.state} in ('forming', 'active')`
+        : sql`${circles.state} in ('forming', 'active') and ${circles.kind} <> ${CIRCLE_KIND_PUBLIC}`,
+    )
     .groupBy(circles.id, plans.name)
-    .having(sql`count(${circleMembers.userId}) < ${MAX_MEMBERS}`)
+    // The five-member cap filters ordinary circles; the unbounded public circle
+    // is exempt so it never drops out of browse once it fills past five.
+    .having(
+      sql`${circles.kind} = ${CIRCLE_KIND_PUBLIC} or count(${circleMembers.userId}) < ${MAX_MEMBERS}`,
+    )
     .orderBy(asc(circles.createdAt));
 
   const open = rows.filter((row) => row.memberCount > 0);
@@ -413,6 +465,7 @@ export async function loadThreadMessages(
       id: messages.id,
       authorId: messages.authorId,
       authorName: users.name,
+      anonName: messages.anonName,
       body: messages.body,
       sourceLanguage: messages.sourceLanguage,
       kind: messages.kind,
@@ -467,13 +520,16 @@ export async function loadThreadMessages(
 
   return rows.map((row) => {
     const kind = threadKind(row.kind);
+    // A post is a system "Round" post iff it has neither a member author nor an
+    // anonymous author (Step 30). Anonymous public-circle posts (authorId null,
+    // anonName set) are member-authored content for every rule below.
+    const memberAuthored = row.authorId !== null || row.anonName !== null;
     // Translation applies only to member-authored posts read by someone whose
-    // language differs from the source (brief §5.12). System posts (authorId
-    // null) are never translated after the fact — Step 28 generates those
-    // per-language instead.
+    // language differs from the source (brief §5.12). System posts are never
+    // translated after the fact — Step 28 generates those per-language instead.
     const translatable =
       Boolean(readerLanguage) &&
-      row.authorId !== null &&
+      memberAuthored &&
       row.sourceLanguage !== readerLanguage;
     const translation =
       translatable && row.translationBody
@@ -486,7 +542,7 @@ export async function loadThreadMessages(
     // digests row (they are display names, language-independent). Absent → the
     // base-language content renders unchanged.
     const variant =
-      row.authorId === null && row.variantBody
+      !memberAuthored && row.variantBody
         ? {
             body: row.variantBody,
             questions: row.variantQuestions,
@@ -500,8 +556,11 @@ export async function loadThreadMessages(
     return {
       id: row.id,
       authorId: row.authorId,
-      // Round is the author of every system post — never a member's name.
-      authorName: row.authorId === null ? "Round" : (row.authorName ?? "Reader"),
+      // Member → their name; anonymous public-circle author → their "Reader #n"
+      // name (Step 30); neither → Round's system post.
+      authorName: memberAuthored
+        ? (row.authorName ?? row.anonName ?? "Reader")
+        : "Round",
       body: displayBody,
       sourceLanguage: row.sourceLanguage,
       kind,
@@ -567,6 +626,24 @@ export async function loadCirclePlanDay(
     .innerJoin(planDays, eq(planDays.planId, circles.planId))
     .where(and(eq(circles.id, circleId), eq(planDays.dayNumber, dayNumber)));
   return row ?? null;
+}
+
+/**
+ * The circle's current plan day for the composer (Step 30): the day of the most
+ * recent conversation-starters card — the day the circle last opened for reading
+ * — falling back to day 1 when it has opened none. Used to prime an anonymous
+ * visitor's reflection composer in the public circle without a ?reflect param.
+ */
+export async function loadCircleCurrentDay(
+  circleId: string,
+): Promise<CirclePlanDay | null> {
+  const [row] = await db
+    .select({ dayNumber: messages.dayNumber })
+    .from(messages)
+    .where(and(eq(messages.circleId, circleId), eq(messages.kind, "starters")))
+    .orderBy(desc(messages.createdAt))
+    .limit(1);
+  return loadCirclePlanDay(circleId, row?.dayNumber ?? 1);
 }
 
 /** Count a circle's members — the size gate for join. */

@@ -10,6 +10,7 @@ import {
   type CirclePlanDay,
 } from "@/lib/circles";
 import { loadOwnReflection } from "@/lib/reflections";
+import { AnonCircleThread } from "./anon-thread";
 import { CircleThread } from "./thread";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,12 @@ export default async function CircleThreadPage({
   const { id: circleId } = await params;
   const { reflect } = await searchParams;
   const session = await auth();
-  if (!session?.user) redirect("/circles");
+  // Path B (Step 30): an Instant Access visitor has no cookie session — their
+  // token lives in sessionStorage. Hand off to the client wrapper, which loads
+  // the public circle with the session header (and bounces non-public circles).
+  if (!session?.user) {
+    return <AnonCircleThread circleId={circleId} />;
+  }
 
   const [circle, member] = await Promise.all([
     loadThreadCircle(circleId),

@@ -21,6 +21,7 @@ import { context } from "./context";
 import { health } from "./health";
 import { flashcard } from "./flashcard";
 import { memory } from "./memory";
+import { circleBot } from "./circle-bot";
 
 export const agents: readonly AnyAgent[] = [
   planBuilder,
@@ -38,6 +39,7 @@ export const agents: readonly AnyAgent[] = [
   health,
   flashcard,
   memory,
+  circleBot,
 ];
 
 export function getAgent(name: string): AnyAgent | undefined {
