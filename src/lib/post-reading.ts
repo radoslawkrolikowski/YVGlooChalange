@@ -27,9 +27,10 @@ import {
   conversationStarters,
   highlights,
   messages,
+  messageVariants,
   preReadingPrompts,
 } from "@/db/schema";
-import { loadCirclePlanDay } from "@/lib/circles";
+import { loadCircleMemberLanguages, loadCirclePlanDay } from "@/lib/circles";
 import { fetchPassage } from "@/lib/youversion";
 
 /** Passage text is context only — cap it to keep the Gloo prompt small. */
@@ -161,6 +162,39 @@ export async function postConversationStarters(
       .update(conversationStarters)
       .set({ questions, model, messageId: message.id })
       .where(eq(conversationStarters.id, claim.id));
+
+    // Step 28 — one native generation per OTHER member language present in the
+    // circle. Each reader sees the starters in their own language, never a
+    // translation (brief §5.12). The passage text is the same grounding for
+    // every language; only the questions are regenerated. Best-effort per
+    // language — a failure leaves that reader on the base-language card.
+    const languages = await loadCircleMemberLanguages(input.circleId);
+    for (const language of languages) {
+      if (language === input.language) continue;
+      try {
+        const variant = await generateConversationStarters({
+          passageReference: day.reference,
+          passageText: passage.content.slice(0, MAX_PASSAGE_CHARS),
+          sessionHighlights,
+          preReadingPrompts: prompts,
+          language,
+        });
+        await db
+          .insert(messageVariants)
+          .values({
+            messageId: message.id,
+            language,
+            body: variant.questions.join("\n"),
+            questions: variant.questions,
+            model: variant.model,
+          })
+          .onConflictDoNothing({
+            target: [messageVariants.messageId, messageVariants.language],
+          });
+      } catch {
+        // Best-effort: this reader falls back to the base-language starters.
+      }
+    }
 
     return message.id;
   } catch {

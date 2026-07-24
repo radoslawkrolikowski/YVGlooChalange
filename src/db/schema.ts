@@ -471,6 +471,65 @@ export const messageTranslations = pgTable(
   ],
 );
 
+// --- AI message language variants (Step 28) -------------------------------
+//
+// Per the brief (§5.12) AI-generated content is NEVER translated after the
+// fact — it is regenerated directly in each member's language. Step 27's
+// Translation Agent therefore skips every authorId-null system post; this table
+// is where their per-language native generations live instead.
+//
+// One row per (AI message, non-source language): when the digest (24), lesson
+// summary (25), conversation starters (20), icebreaker (22), or Companion turn
+// (24A) is produced, the orchestrator generates it once per distinct member
+// language and stores every language OTHER than the base post's own language
+// here as a native variant (the base language stays on the messages row and its
+// structured table — digests / conversation_starters). loadThreadMessages joins
+// the row matching the reader's language and renders it in place of the base,
+// with NO "Translated by Round" label (these are native generations, not
+// translations). A reader whose language has no variant (e.g. they joined after
+// the post was generated) falls back to the base-language content.
+//
+// The overlap MEMBER names on a digest are display names — language-independent
+// — so they stay on the base digests row and are reused for every reader; only
+// the theme PHRASE is stored per language here. Written under the same
+// idempotency claim as the base post, so a re-run never duplicates a variant
+// (the (message, language) primary key is the fence). Path A only, like every
+// circle-facing feature.
+export const messageVariants = pgTable(
+  "message_variants",
+  {
+    messageId: text("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    /** The reader language this variant is written in, ISO 639-1, e.g. "es". */
+    language: text("language").notNull(),
+    /** Rendered post body in this language — the icebreaker/companion prose,
+     * the digest's readable body lines, or the starters as joined lines. Used
+     * directly for icebreaker/companion and as the fallback for the rest. */
+    body: text("body").notNull(),
+    /** Starters variant: the individually replyable questions in this language. */
+    questions: text("questions").array(),
+    /** Digest variant: the 2–3 sentence synthesis in this language. */
+    synthesis: text("synthesis"),
+    /** Digest variant: the shared-theme phrase in this language. Overlap member
+     * NAMES are language-independent and stay on the base digests row. */
+    overlapTheme: text("overlap_theme"),
+    /** Digest variant: the discussion question in this language. */
+    question: text("question"),
+    /** Digest variant: the 3–5 sentence lesson summary (Step 25) in this language. */
+    summary: text("summary"),
+    /** Model that served this variant's generation, as reported by Gloo. */
+    model: text("model"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // One variant per (message, language) — the idempotency fence.
+    primaryKey({ columns: [table.messageId, table.language] }),
+  ],
+);
+
 // --- Reflections (Step 19) ------------------------------------------------
 //
 // The canonical record of every daily reflection — flagged AND unflagged. A

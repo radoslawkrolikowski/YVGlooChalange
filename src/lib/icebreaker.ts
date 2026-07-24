@@ -32,7 +32,15 @@ import {
   type ProfileOption,
 } from "@/config/profile";
 import { db } from "@/db";
-import { circleMembers, circles, messages, plans, users } from "@/db/schema";
+import {
+  circleMembers,
+  circles,
+  messages,
+  messageVariants,
+  plans,
+  users,
+} from "@/db/schema";
+import { loadCircleMemberLanguages } from "@/lib/circles";
 
 /** Map a slug list to its display labels, dropping anything unrecognised. */
 function labels(options: ProfileOption[], values: string[] | null): string[] {
@@ -75,14 +83,11 @@ async function loadFoundingMembers(
     circleHopes: labels(CIRCLE_HOPE_OPTIONS, row.circleHopes),
   })) as [IcebreakerMember, IcebreakerMember];
 
-  // One message, one language for now: the founder's (earliest member's)
-  // preferred language sets the circle's baseline, falling back to the second
-  // member's, then English. Multilingual delivery is deliberately NOT done
-  // here and is NOT the Translation Agent's job: per brief §5.12, AI-generated
-  // messages (icebreaker, digest, summary, starters) are never translated after
-  // the fact — they are regenerated directly in each member's language. Step 28
-  // ("AI messages generated per-language") upgrades this single-language base
-  // into one native generation per distinct member language.
+  // The base language is the founder's (earliest member's) preferred language,
+  // falling back to the second member's, then English. It sets the messages-row
+  // post; every OTHER distinct member language gets its own native generation as
+  // a message_variants row (Step 28). Per brief §5.12 these are never translated
+  // after the fact — the Translation Agent skips authorId-null system posts.
   const language = rows[0].language ?? rows[1].language ?? "en";
   return { members, language };
 }
@@ -141,6 +146,37 @@ export async function postIcebreaker(circleId: string): Promise<string | null> {
         kind: "icebreaker",
       })
       .returning({ id: messages.id });
+
+    // Step 28 — one native generation per OTHER member language. At activation a
+    // circle has exactly the two founders, so this is at most one extra language,
+    // but it keeps the icebreaker consistent with the rest of Round's per-language
+    // posts (brief §5.12: never translated after the fact). Best-effort — a
+    // failure leaves that reader on the base-language welcome.
+    const planName = planRow[0]?.name ?? "your reading plan";
+    const languages = await loadCircleMemberLanguages(circleId);
+    for (const language of languages) {
+      if (language === founding.language) continue;
+      try {
+        const variant = await generateIcebreaker({
+          members: founding.members,
+          planName,
+          language,
+        });
+        await db
+          .insert(messageVariants)
+          .values({
+            messageId: posted.id,
+            language,
+            body: variant.message,
+            model: variant.model,
+          })
+          .onConflictDoNothing({
+            target: [messageVariants.messageId, messageVariants.language],
+          });
+      } catch {
+        // Best-effort: this reader falls back to the base-language icebreaker.
+      }
+    }
 
     return posted.id;
   } catch {
