@@ -2,6 +2,7 @@
 
 import { HandHeart, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { ANON_TOKEN_STORAGE_KEY } from "@/app/instant-access-button";
 import {
   Button,
   Card,
@@ -18,20 +19,17 @@ import type { PrayerDraft, PrayerIntent, SavedPrayer } from "./types";
  * prayer drawn from the reader's own reading, reflections and highlights) and a
  * free-text request ("for a good interview tomorrow"). Generated prayers are
  * private; sharing to the circle is a separate, explicit, recast-first action
- * in the sheet. Saved prayers list here — Path A from the database, Path B from
- * sessionStorage for the browser session (no database row, per the brief).
+ * in the sheet.
+ *
+ * Saved prayers list here through /api/prayer on both session paths (Step 30A):
+ * a signed-in user's are owned by their user row, an anonymous visitor's by
+ * their session id — session-scoped, gone with the session, no users row.
  */
 
-const ANON_SAVED_KEY = "round.saved-prayers";
-
-function loadAnonSaved(): SavedPrayer[] {
-  try {
-    const raw = sessionStorage.getItem(ANON_SAVED_KEY);
-    const parsed = raw ? (JSON.parse(raw) as SavedPrayer[]) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+/** The anonymous session token, when this is a Path B visitor. */
+function sessionHeaders(): Record<string, string> {
+  const token = sessionStorage.getItem(ANON_TOKEN_STORAGE_KEY);
+  return token ? { "x-round-session": token } : {};
 }
 
 function relativeDate(iso: string): string {
@@ -57,14 +55,10 @@ export function PrayerScreen({
   const [intent, setIntent] = useState<PrayerIntent | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Load saved prayers: the database (Path A) or sessionStorage (Path B).
+  // Load this session's saved prayers — same endpoint for both paths.
   useEffect(() => {
-    if (isAnonymous) {
-      setSaved(loadAnonSaved());
-      return;
-    }
     let cancelled = false;
-    fetch("/api/prayer")
+    fetch("/api/prayer", { headers: sessionHeaders() })
       .then((response) => response.json())
       .then((body) => {
         if (!cancelled && body.ok && Array.isArray(body.prayers)) {
@@ -75,45 +69,23 @@ export function PrayerScreen({
     return () => {
       cancelled = true;
     };
-  }, [isAnonymous]);
+  }, []);
 
-  const persist = useCallback(
-    async (draft: PrayerDraft): Promise<boolean> => {
-      if (isAnonymous) {
-        const entry: SavedPrayer = {
-          id: crypto.randomUUID(),
-          mode: draft.mode,
-          title: draft.title,
-          body: draft.body,
-          readingReference: draft.readingReference,
-          language: draft.language,
-          createdAt: new Date().toISOString(),
-        };
-        const next = [entry, ...loadAnonSaved()];
-        try {
-          sessionStorage.setItem(ANON_SAVED_KEY, JSON.stringify(next));
-        } catch {
-          return false;
-        }
-        setSaved(next);
-        return true;
-      }
-      try {
-        const res = await fetch("/api/prayer", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(draft),
-        });
-        const body = await res.json();
-        if (!res.ok || !body.ok || !body.prayer) return false;
-        setSaved((current) => [body.prayer as SavedPrayer, ...current]);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    [isAnonymous],
-  );
+  const persist = useCallback(async (draft: PrayerDraft): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/prayer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...sessionHeaders() },
+        body: JSON.stringify(draft),
+      });
+      const body = await res.json();
+      if (!res.ok || !body.ok || !body.prayer) return false;
+      setSaved((current) => [body.prayer as SavedPrayer, ...current]);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
 
   function submitCustom() {
     const trimmed = prompt.trim();

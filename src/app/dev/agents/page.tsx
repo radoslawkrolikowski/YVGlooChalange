@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { agentRuns } from "@/db/schema";
 import { devToolingEnabled } from "@/lib/dev-gate";
 import { AgentConsole, type ConsoleAgent } from "./agent-console";
+import { AnonPruneControl } from "./anon-prune-control";
 import { CronConsole, type ConsoleCronJob } from "./cron-console";
 import { DemoSeedControl } from "./demo-seed-control";
 
@@ -130,7 +131,10 @@ export default async function AgentConsolePage() {
       <h2 className="mb-3 mt-8 font-serif text-xl font-semibold tracking-tight text-ink">
         Demo circle
       </h2>
-      <DemoSeedControl />
+      <div className="flex flex-col gap-4">
+        <DemoSeedControl />
+        <AnonPruneControl />
+      </div>
       <h2 className="mb-3 mt-8 font-serif text-xl font-semibold tracking-tight text-ink">
         Agents
       </h2>

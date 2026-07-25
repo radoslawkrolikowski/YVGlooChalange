@@ -4,36 +4,35 @@ import {
   markNotificationsRead,
 } from "@/lib/notifications";
 import { resolveSession } from "@/lib/session";
+import { sessionOwner } from "@/lib/session-owner";
 
 export const dynamic = "force-dynamic";
 
-// Step 29: the notification bell's data.
+// Step 29: the notification bell's data. Step 30A opens it to anonymous
+// Instant Access sessions, whose notifications are session-scoped rows (no user
+// row, pruned on the Step 31 rail) — so the bell surface works identically on
+// both paths and the demo can show a live bot reply landing in it.
 //
-// GET  /api/notifications         → this user's recent notifications + unread
+// GET  /api/notifications         → the caller's recent notifications + unread
 //   count (the bell polls this).
 // POST /api/notifications  { read: true } → mark all read (the bell was opened);
 //   returns the fresh feed.
 //
-// Anonymous Instant Access sessions have no notifications (no database row, per
-// the brief), so both handlers answer an empty feed rather than a 401 — the bell
-// is not rendered for them anyway, and an empty feed keeps any stray poll quiet.
+// A request with no session at all answers an empty feed rather than a 401 — a
+// stray poll from a screen the visitor has already left stays quiet.
 
 const EMPTY = { ok: true, items: [], unreadCount: 0 } as const;
 
 export async function GET(request: Request) {
   const session = await resolveSession(request);
-  if (!session || session.kind !== "user") {
-    return NextResponse.json(EMPTY);
-  }
-  const feed = await loadNotifications(session.userId);
+  if (!session) return NextResponse.json(EMPTY);
+  const feed = await loadNotifications(sessionOwner(session));
   return NextResponse.json({ ok: true, ...feed });
 }
 
 export async function POST(request: Request) {
   const session = await resolveSession(request);
-  if (!session || session.kind !== "user") {
-    return NextResponse.json(EMPTY);
-  }
-  const feed = await markNotificationsRead(session.userId);
+  if (!session) return NextResponse.json(EMPTY);
+  const feed = await markNotificationsRead(sessionOwner(session));
   return NextResponse.json({ ok: true, ...feed });
 }

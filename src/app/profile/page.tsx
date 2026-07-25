@@ -25,7 +25,10 @@ export default async function ProfilePage() {
         profileAnswers={await loadUserProfileAnswers(session.user.id)}
         highlightSummary={await loadHighlightSummary(session.user.id)}
         highlightsConsent={session.user.highlightsConsent}
-        sessionHighlights={await loadSessionHighlightList(session.user.id)}
+        sessionHighlights={await loadSessionHighlightList({
+          kind: "user",
+          userId: session.user.id,
+        })}
         notes={await loadNotesList(session.user.id)}
       />
     );

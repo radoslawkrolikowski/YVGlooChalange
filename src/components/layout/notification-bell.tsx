@@ -1,21 +1,30 @@
 "use client";
 
 // Notification bell (Step 29): the header surface for the Reminder agent's
-// output. Polls /api/notifications, shows an unread-count badge, and opens an
-// anchored panel listing each notification as a card row (type icon, title,
-// body, relative time, unread dot). Opening the panel marks everything read.
+// output and, from Step 30A, for a bot reply landing on a post you wrote.
+// Polls /api/notifications, shows an unread-count badge, and opens an anchored
+// panel listing each notification as a card row (type icon, title, body,
+// relative time, unread dot). Opening the panel marks everything read.
 //
-// Path A only — rendered from HeaderMenu solely for signed-in users; Instant
-// Access has no notifications (no database row, per the brief).
+// Both session paths (Step 30A): an anonymous Instant Access session sends its
+// signed token with each call and sees its own session-scoped notifications —
+// the same surface, the same code, nothing persisted past the session.
 
-import { Bell, BookOpen, MessagesSquare } from "lucide-react";
+import { Bell, BookOpen, MessagesSquare, Reply } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ANON_TOKEN_STORAGE_KEY } from "@/app/instant-access-button";
 import { EmptyState } from "@/components/ui";
 import type { NotificationItem } from "@/lib/notifications";
 
 /** How often the bell re-polls while the tab is focused. */
 const POLL_MS = 30_000;
+
+/** The anonymous session token, when this is a Path B visitor. */
+function anonHeaders(): Record<string, string> {
+  const token = sessionStorage.getItem(ANON_TOKEN_STORAGE_KEY);
+  return token ? { "x-round-session": token } : {};
+}
 
 interface Feed {
   items: NotificationItem[];
@@ -35,7 +44,8 @@ function relativeTime(iso: string): string {
 }
 
 function TypeIcon({ type }: { type: string }) {
-  const Icon = type === "reading" ? BookOpen : MessagesSquare;
+  const Icon =
+    type === "reading" ? BookOpen : type === "reply" ? Reply : MessagesSquare;
   return (
     <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-light text-primary">
       <Icon size={16} aria-hidden />
@@ -60,6 +70,7 @@ export function NotificationBell() {
     try {
       const response = await fetch("/api/notifications", {
         cache: "no-store",
+        headers: anonHeaders(),
       });
       const payload = (await response.json()) as Partial<Feed> & {
         ok?: boolean;
@@ -116,7 +127,7 @@ export function NotificationBell() {
       try {
         const response = await fetch("/api/notifications", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...anonHeaders() },
           body: JSON.stringify({ read: true }),
         });
         const payload = (await response.json()) as Partial<Feed> & {

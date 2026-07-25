@@ -40,9 +40,10 @@ export function HeaderMenu({
 
   return (
     <div className="flex items-center gap-1">
-      {/* Notification bell — Path A only; Instant Access has no notifications
-          (no database row, per the brief). Sits left of the account menu. */}
-      {!isAnonymous && <NotificationBell />}
+      {/* Notification bell — both paths since Step 30A: an anonymous session's
+          notifications are session-scoped rather than absent, so the surface
+          works in the demo. Sits left of the account menu. */}
+      <NotificationBell />
       <Menu
         label="Account menu"
         trigger={

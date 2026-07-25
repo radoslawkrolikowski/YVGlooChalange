@@ -2,7 +2,8 @@
 
 import { Highlighter, KeyRound } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ANON_TOKEN_STORAGE_KEY } from "@/app/instant-access-button";
 import { AppShell } from "@/components/layout/app-shell";
 import { HeaderMenu } from "@/components/layout/header-menu";
 import {
@@ -15,7 +16,7 @@ import {
   SectionLabel,
 } from "@/components/ui";
 import { PROFILE_DEFAULTS } from "@/config/profile";
-import { loadAnonHighlights } from "@/lib/anon-highlights";
+import type { SessionHighlightListEntry } from "@/lib/highlights";
 import { loadAnonNotes } from "@/lib/anon-notes";
 import { clearAnonSession, useAnonSession } from "@/lib/use-anon-session";
 import { HomeSkeleton } from "../home/home-skeleton";
@@ -36,6 +37,28 @@ export function AnonProfile() {
   const router = useRouter();
   const session = useAnonSession();
   const [confirmingRevoke, setConfirmingRevoke] = useState(false);
+  // In-app highlights are session-scoped rows since Step 30A, so this card is
+  // fed from the same endpoint the signed-in profile reads server-side.
+  const [sessionHighlights, setSessionHighlights] = useState<
+    SessionHighlightListEntry[]
+  >([]);
+
+  useEffect(() => {
+    const token = sessionStorage.getItem(ANON_TOKEN_STORAGE_KEY);
+    if (!token) return;
+    fetch("/api/highlights/session", {
+      headers: { "x-round-session": token },
+    })
+      .then((response) => response.json())
+      .then((body) => {
+        if (body.ok) {
+          setSessionHighlights(body.highlights as SessionHighlightListEntry[]);
+        }
+      })
+      .catch(() => {
+        // The card just renders its empty state this visit.
+      });
+  }, []);
 
   if (!session) {
     return (
@@ -101,17 +124,15 @@ export function AnonProfile() {
         {/* In-app highlights (Step 14) — this session only, newest first;
             gone when the session ends, like everything anonymous. */}
         <SessionHighlightsCard
-          entries={loadAnonHighlights()
-            .map((entry, index) => ({
-              key: index,
-              label: entry.label ?? entry.reference,
-              versionId: entry.versionId,
-              versionAbbreviation: entry.versionAbbreviation,
-              text: entry.text,
-              attribution: entry.attribution ?? null,
-              createdAt: entry.createdAt,
-            }))
-            .reverse()}
+          entries={sessionHighlights.map((entry) => ({
+            key: entry.id,
+            label: entry.label ?? entry.reference,
+            versionId: entry.versionId,
+            versionAbbreviation: entry.versionAbbreviation,
+            text: entry.text,
+            attribution: entry.attribution,
+            createdAt: entry.createdAt,
+          }))}
         />
 
         <Card className="flex flex-col gap-3">

@@ -1,54 +1,65 @@
 import { NextResponse } from "next/server";
 import { findSupportedVersion } from "@/config/bible-versions";
+import { MAX_SESSION_HIGHLIGHT_LENGTH } from "@/config/highlights";
 import {
   createSessionHighlight,
   listSessionHighlights,
-  MAX_SESSION_HIGHLIGHT_LENGTH,
+  loadSessionHighlightList,
 } from "@/lib/highlights";
 import { resolveSession } from "@/lib/session";
+import { sessionOwner } from "@/lib/session-owner";
 
 export const dynamic = "force-dynamic";
 
-// Step 14: in-app highlights made while reading — Path A persistence.
+// Step 14: in-app highlights made while reading. Step 30A opens the route to
+// anonymous Instant Access sessions, whose rows are tagged with the session id
+// instead of a user id — session-scoped and pruned on the Step 31 rail, so the
+// reading screen behaves identically on both paths with no "sign in to use
+// this" gate. (The Step 7 OAuth *import* remains Path A only: it needs a
+// YouVersion account by definition.)
 //
-// GET  /api/highlights/session?reference=PSA.23 → this user's in-app
+// GET  /api/highlights/session?reference=PSA.23 → the caller's in-app
 //   highlights for that passage (all versions; the client filters to the
 //   version on display).
+// GET  /api/highlights/session → every in-app highlight the caller has made,
+//   newest first, with copyright attributions resolved — the profile's
+//   "Highlighted in Round" card, which Path B renders client-side.
 // POST { reference, label, versionId, versionAbbreviation, text } → store
 //   one highlight with the version it was made in.
-//
-// Anonymous sessions never hit this route: their highlights live in browser
-// sessionStorage only (no database row, per the brief), so both handlers
-// answer 401 with a hint the client already knows to expect.
 
 const REFERENCE_PATTERN = /^[A-Z0-9]{3}(\.[0-9]+(-[0-9]+)?){0,2}$/;
 
 export async function GET(request: Request) {
   const session = await resolveSession(request);
-  if (!session || session.kind !== "user") {
+  if (!session) {
     return NextResponse.json(
-      { ok: false, error: "Sign in with YouVersion first" },
+      { ok: false, error: "No valid session" },
       { status: 401 },
     );
   }
+  const owner = sessionOwner(session);
 
   const reference = new URL(request.url).searchParams.get("reference");
-  if (!reference || !REFERENCE_PATTERN.test(reference)) {
+  if (reference === null) {
+    const highlights = await loadSessionHighlightList(owner);
+    return NextResponse.json({ ok: true, highlights });
+  }
+  if (!REFERENCE_PATTERN.test(reference)) {
     return NextResponse.json(
       { ok: false, error: "A USFM reference is required, e.g. PSA.23" },
       { status: 400 },
     );
   }
 
-  const highlights = await listSessionHighlights(session.userId, reference);
+  const highlights = await listSessionHighlights(owner, reference);
   return NextResponse.json({ ok: true, highlights });
 }
 
 export async function POST(request: Request) {
   const session = await resolveSession(request);
-  if (!session || session.kind !== "user") {
+  if (!session) {
     return NextResponse.json(
-      { ok: false, error: "Sign in with YouVersion first" },
+      { ok: false, error: "No valid session" },
       { status: 401 },
     );
   }
@@ -93,7 +104,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const highlight = await createSessionHighlight(session.userId, {
+  const highlight = await createSessionHighlight(sessionOwner(session), {
     reference,
     label: typeof label === "string" && label.length > 0 ? label : null,
     versionId: version.id,

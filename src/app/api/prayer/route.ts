@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { savedPrayers } from "@/db/schema";
 import { resolveSession } from "@/lib/session";
+import { ownerColumns, ownerWhere, sessionOwner } from "@/lib/session-owner";
 
 export const dynamic = "force-dynamic";
 
 // Step 26 — saved prayers for the Prayer tab.
 //
-// Path A persists here; Path B (Instant Access) keeps saved prayers in
-// sessionStorage for the browser session and never writes a row (brief §7), so
-// GET returns an empty list and POST is a no-op for anonymous sessions — the
-// client owns Path B persistence.
+// Both session paths since Step 30A: a signed-in user's prayer is owned by
+// their user row, an Instant Access visitor's by their anonymous session id.
+// The anonymous row creates no users row, is readable only by that session, and
+// is pruned on the Step 31 rail — session-scoped, not persisted.
 
 const MAX_BODY_LENGTH = 4000;
 const MAX_TITLE_LENGTH = 200;
@@ -31,14 +32,16 @@ export async function GET(request: Request) {
   if (!session) {
     return NextResponse.json({ ok: false, error: "No valid session" }, { status: 401 });
   }
-  if (session.kind !== "user") {
-    return NextResponse.json({ ok: true, prayers: [] });
-  }
-
   const rows = await db
     .select()
     .from(savedPrayers)
-    .where(eq(savedPrayers.userId, session.userId))
+    .where(
+      ownerWhere(
+        savedPrayers.userId,
+        savedPrayers.anonSessionId,
+        sessionOwner(session),
+      ),
+    )
     .orderBy(desc(savedPrayers.createdAt));
 
   const prayers: SavedPrayerEntry[] = rows.map((row) => ({
@@ -81,15 +84,16 @@ export async function POST(request: Request) {
     typeof body.readingReference === "string" ? body.readingReference.trim() || null : null;
   const language = typeof body.language === "string" ? body.language.trim() || null : null;
 
-  // Anonymous sessions never get a database row — the client keeps them in
-  // sessionStorage. Acknowledge so the client can persist locally.
-  if (session.kind !== "user") {
-    return NextResponse.json({ ok: true, persisted: false });
-  }
-
   const [row] = await db
     .insert(savedPrayers)
-    .values({ userId: session.userId, mode, title, body: text, readingReference, language })
+    .values({
+      ...ownerColumns(sessionOwner(session)),
+      mode,
+      title,
+      body: text,
+      readingReference,
+      language,
+    })
     .returning();
 
   const prayer: SavedPrayerEntry = {
