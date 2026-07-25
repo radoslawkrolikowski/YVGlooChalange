@@ -52,6 +52,13 @@ export interface AnonSession {
    * has no database row.
    */
   profile?: ProfileAnswers;
+  /**
+   * The circle this session has joined — only ever the public demo circle
+   * (Step 30). Path A membership is a `circle_members` row; Path B has no user
+   * row to key one to, so membership lives here, in the token, and ends with
+   * the session like everything else anonymous. Null until they join.
+   */
+  circleId?: string | null;
   issuedAt: number;
 }
 
@@ -159,6 +166,29 @@ export function remintAnonDayComplete(
   return { token: signSession(session), session };
 }
 
+/**
+ * Re-mints the session as a member of `circleId`, with its reading aligned to
+ * the circle's plan — Path B's equivalent of the Step 16 join, which writes a
+ * `circle_members` row and calls alignActivePlan. Joining the circle a visitor
+ * is already in keeps their progress; joining onto a different plan starts that
+ * plan fresh, because the token carries exactly one plan and an anonymous
+ * session has no plan history to pause into (Step 12A).
+ */
+export function remintAnonCircleJoin(
+  current: AnonSession,
+  circle: { circleId: string; planId: string },
+): { token: string; session: AnonSession } {
+  const keepsProgress = current.plan?.planId === circle.planId;
+  const session: AnonSession = {
+    ...current,
+    circleId: circle.circleId,
+    plan: keepsProgress
+      ? current.plan
+      : { planId: circle.planId, startedAt: Date.now(), completedDays: [] },
+  };
+  return { token: signSession(session), session };
+}
+
 export function remintAnonProfile(
   current: AnonSession,
   profile: ProfileAnswers,
@@ -188,8 +218,13 @@ export function verifyAnonSessionToken(token: string): AnonSession | null {
       Buffer.from(payload, "base64url").toString("utf8"),
     ) as AnonSession;
     if (session.kind !== "anonymous") return null;
-    // Tokens minted before Step 11 have no `plan` key; normalise to null.
-    return { ...session, plan: session.plan ?? null };
+    // Tokens minted before Step 11 have no `plan` key, and before the public
+    // circle no `circleId`; normalise both to null.
+    return {
+      ...session,
+      plan: session.plan ?? null,
+      circleId: session.circleId ?? null,
+    };
   } catch {
     return null;
   }

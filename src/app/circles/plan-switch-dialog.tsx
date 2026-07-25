@@ -16,11 +16,15 @@ export interface PlanSwitchPrompt {
 export function PlanSwitchDialog({
   prompt,
   busy,
+  isAnonymous = false,
   onConfirm,
   onCancel,
 }: {
   prompt: { circleName: string; planName: string };
   busy: boolean;
+  /** Path B carries exactly one plan in its token, with no history to pause
+   * into (Step 12A) — so the consequence stated here has to differ. */
+  isAnonymous?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -44,8 +48,10 @@ export function PlanSwitchDialog({
         </h2>
         <p className="text-sm text-ink-soft">
           {prompt.circleName} reads {prompt.planName}. Joining makes it your
-          active plan; your current plan pauses and keeps its progress — you can
-          resume it any time from My Plan.
+          active plan;{" "}
+          {isAnonymous
+            ? "it replaces the plan you picked, and your progress on that one is not kept — an anonymous session carries one plan at a time."
+            : "your current plan pauses and keeps its progress — you can resume it any time from My Plan."}
         </p>
         <div className="flex gap-3">
           <Button full onClick={onConfirm} disabled={busy}>

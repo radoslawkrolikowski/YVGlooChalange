@@ -82,9 +82,10 @@ export function AnonRead() {
               dayCompleted={state.completedDays.includes(day.dayNumber)}
               isLastDay={day.dayNumber >= state.plan.lengthDays}
               nextReference={nextReference}
-              // Anonymous readers have no circle membership until Step 30 — no
-              // reflection prompt on Path B yet.
-              circleId={null}
+              // Membership lives in the token (Step 30A), so a visitor who has
+              // joined the public circle gets the same "share a reflection"
+              // prompt on finishing as a member does.
+              circleId={session.circleId ?? null}
               focusNote={!!targetDay && wantsNoteFocus}
             />
           );
