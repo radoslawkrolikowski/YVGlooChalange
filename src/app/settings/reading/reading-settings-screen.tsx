@@ -57,11 +57,14 @@ export function ReadingSettingsScreen({
             Reading settings
           </SectionLabel>
           <h1 className="font-serif text-2xl font-semibold tracking-tight text-ink">
-            Language &amp; Bible
+            {isAnonymous ? "Name, language & Bible" : "Language & Bible"}
           </h1>
           <p className="text-sm text-ink-soft">
             Every passage is fetched from YouVersion in the version you choose
             here.
+            {isAnonymous
+              ? " Changing your name affects what your circle sees from now on — messages you have already posted keep the name you wrote them under."
+              : ""}
           </p>
         </div>
 
@@ -69,6 +72,7 @@ export function ReadingSettingsScreen({
           <ReadingPreferencesForm
             initialLanguage={initialLanguage}
             initialVersionId={initialVersionId}
+            initialDisplayName={isAnonymous ? displayName : null}
             submitLabel="Save changes"
             onSaved={handleSaved}
           />

@@ -26,7 +26,9 @@ export interface AnonSession {
   sessionId: string;
   /** From the atomic anon_reader_counter sequence. */
   readerNumber: number;
-  /** "Reader #n" — the name shown on any circle message they post. */
+  /** The name shown on any circle message they post and in any prayer Round
+   * recasts for them. Minted as "Reader #n"; onboarding (Step 30A) asks for a
+   * name of their own, prefilled with this, and re-mints the token. */
   displayName: string;
   /** Default until changed in onboarding (Step 9): English. */
   language: string;
@@ -88,20 +90,28 @@ export function mintAnonSession(readerNumber: number): {
 }
 
 /**
- * Re-mints an existing anonymous session with new reading preferences
- * (Step 9). The session has no database row, so "updating" it means issuing
- * a replacement signed token; identity fields (sessionId, readerNumber,
- * displayName, issuedAt) carry over unchanged so the visitor stays the same
- * Reader for the whole browser session.
+ * Re-mints an existing anonymous session with new reading preferences (Step 9)
+ * and, since Step 30A, the name the visitor chose for themselves. The session
+ * has no database row, so "updating" it means issuing a replacement signed
+ * token; sessionId, readerNumber and issuedAt carry over unchanged so the
+ * visitor stays the same session throughout — only what they see and are
+ * called changes. Already-posted messages keep the name they were written
+ * under: those rows are immutable, as every authored row in Round is.
  */
 export function remintAnonSession(
   current: AnonSession,
-  preferences: { language: string; bibleVersionId: number },
+  preferences: {
+    language: string;
+    bibleVersionId: number;
+    /** Validated, normalised name; absent leaves the current one. */
+    displayName?: string;
+  },
 ): { token: string; session: AnonSession } {
   const session: AnonSession = {
     ...current,
     language: preferences.language,
     bibleVersionId: preferences.bibleVersionId,
+    displayName: preferences.displayName ?? current.displayName,
     onboarded: true,
   };
   return { token: signSession(session), session };
