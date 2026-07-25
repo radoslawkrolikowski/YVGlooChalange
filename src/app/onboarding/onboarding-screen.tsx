@@ -9,11 +9,13 @@ import { Button, Card, ProgressSteps, SectionLabel } from "@/components/ui";
 import { UpgradeBanner } from "../home/upgrade-banner";
 
 /*
- * Onboarding step 1 of 3 (Step 9): language and Bible version. The stepped
- * progress indicator is shared with Steps 10–12; Continue moves on to the
- * "About you" questions (Step 10). Path B (anonymous) sees a clearly
- * visible skip that keeps the minted defaults, per the brief's "optional
- * prompt" — Path A is expected to choose.
+ * Onboarding step 1 of 3 (Step 9): language and Bible version, and — for an
+ * anonymous session since Step 30A — the name they go by, required here and
+ * prefilled with the minted "Reader #n". The stepped progress indicator is
+ * shared with Steps 10–12; Continue moves on to the "About you" questions
+ * (Step 10). Path B keeps a clearly visible skip that holds the minted
+ * defaults (name included), per the brief's "optional prompt" and one-tap
+ * entry — Path A is expected to choose.
  */
 
 export const ONBOARDING_STEPS = ["Language & Bible", "About you", "Your plan"];
@@ -46,8 +48,9 @@ export function OnboardingScreen({
             Read in your own words
           </h1>
           <p className="text-sm text-ink-soft">
-            Choose the language and Bible version Round uses for every passage
-            you read. You can change both at any time from your profile.
+            {isAnonymous
+              ? "Choose what your circle calls you, and the language and Bible version Round uses for every passage you read. All three can change at any time from your profile."
+              : "Choose the language and Bible version Round uses for every passage you read. You can change both at any time from your profile."}
           </p>
         </div>
 
@@ -58,6 +61,7 @@ export function OnboardingScreen({
           <ReadingPreferencesForm
             initialLanguage={initialLanguage}
             initialVersionId={initialVersionId}
+            initialDisplayName={isAnonymous ? displayName : null}
             submitLabel="Continue"
             onSaved={() => router.push("/onboarding/about")}
           />

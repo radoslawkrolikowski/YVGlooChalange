@@ -22,6 +22,11 @@
 // renders as an ordinary member message and Step 27's Translation Agent covers
 // it (called here after the insert) — persona content, never Round's
 // authorId-null facilitation output.
+//
+// Step 30A: once the reply lands, the person it answers is notified on the bell
+// (notifyThreadReply) — the same code for a signed-in member and an anonymous
+// visitor, whose notification is session-scoped and pruned with the rest of
+// their session data.
 
 import { and, desc, eq, gte, isNotNull, ne, or } from "drizzle-orm";
 import { generateCircleBotReply, type CircleBotContextMessage } from "@/agents/circle-bot";
@@ -30,6 +35,7 @@ import { db } from "@/db";
 import { appMeta, circleMembers, messages, users } from "@/db/schema";
 import { loadCirclePlanDay } from "@/lib/circles";
 import { screenReflection } from "@/lib/escalation";
+import { notifyThreadReply } from "@/lib/notifications";
 import { translateNewMessage } from "@/lib/translation";
 import { fetchPassage } from "@/lib/youversion";
 
@@ -151,7 +157,9 @@ export async function maybeBotReply(
     const [trigger] = await db
       .select({
         authorId: messages.authorId,
+        anonSessionId: messages.anonSessionId,
         anonName: messages.anonName,
+        sourceLanguage: messages.sourceLanguage,
         body: messages.body,
         kind: messages.kind,
       })
@@ -241,6 +249,20 @@ export async function maybeBotReply(
 
     // Translate for other member languages, same as any member post.
     await translateNewMessage(message.id);
+
+    // Step 30A: tell the person the bot answered. Runs after the translation
+    // fan-out so the notification can carry the reader's own language, and is
+    // best-effort — a failed notification never costs the reply.
+    await notifyThreadReply({
+      circleId,
+      replyMessageId: message.id,
+      replyBody: output.reply,
+      replyLanguage: language,
+      triggerAuthorId: trigger.authorId,
+      triggerAnonSessionId: trigger.anonSessionId,
+      recipientLanguage: trigger.sourceLanguage,
+      botName: bot.name ?? "Round",
+    });
 
     return { posted: true, messageId: message.id };
   } catch (error) {

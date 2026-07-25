@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ANON_TOKEN_STORAGE_KEY } from "@/app/instant-access-button";
-import { clearAnonHighlights } from "@/lib/anon-highlights";
 import type { AnonSession } from "@/lib/anon-session";
 
 /*
@@ -39,7 +38,9 @@ export function useAnonSession(): AnonSession | null {
 }
 
 export function clearAnonSession() {
+  // Dropping the token ends the session: everything tagged with its session id
+  // (reflections, messages, highlights, saved prayers, notifications) becomes
+  // unreachable at once — no client-side store to clear since Step 30A — and is
+  // deleted outright by the Step 31 prune.
   sessionStorage.removeItem(ANON_TOKEN_STORAGE_KEY);
-  // Session highlights (Step 14) belong to the session — gone with it.
-  clearAnonHighlights();
 }

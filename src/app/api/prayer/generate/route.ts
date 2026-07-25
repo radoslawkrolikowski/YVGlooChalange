@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { generatePrayer, buildPrayerMessages, type PrayerInput } from "@/agents/prayer";
 import { chatCompletionStream } from "@/lib/gloo";
 import { screenReflection } from "@/lib/escalation";
-import { buildUserPrayerContext } from "@/lib/prayer-context";
+import { buildPrayerContext } from "@/lib/prayer-context";
 import { resolveSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -77,12 +77,10 @@ export async function POST(request: Request) {
     }
   }
 
-  // Gather the user's own private material (Path A only; anon has no server
-  // history, so the prayer is a general one in their language).
-  const context =
-    session.kind === "user"
-      ? await buildUserPrayerContext(session.userId)
-      : { text: "", readingReference: null, readingLabel: null };
+  // Gather the reader's own private material. Step 30A grounds the anonymous
+  // path in the same way — its answers and plan come from the signed token, its
+  // reflections and highlights from this session's own rows.
+  const context = await buildPrayerContext(session);
 
   const input: PrayerInput = {
     mode,

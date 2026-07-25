@@ -16,6 +16,7 @@ export function AnonHome() {
   const session = useAnonSession();
   const [reading, setReading] = useState<TodayReading | null>(null);
   const [planLoading, setPlanLoading] = useState(true);
+  const [circleName, setCircleName] = useState<string | null>(null);
 
   // Today's reading comes from the plan state in the signed token (Step 11);
   // a failed fetch just leaves the Today card in its designed empty state.
@@ -42,6 +43,25 @@ export function AnonHome() {
       .finally(() => setPlanLoading(false));
   }, [session]);
 
+  // Joining the public circle lights up Home's circle card, the same slot a
+  // member's circle fills (Step 8C). Membership lives in the token (Step 30A).
+  useEffect(() => {
+    if (!session?.circleId) {
+      setCircleName(null);
+      return;
+    }
+    fetch("/api/circles/public")
+      .then((response) => response.json())
+      .then((body) => {
+        if (body.ok && body.circle?.id === session.circleId) {
+          setCircleName(body.circle.name as string);
+        }
+      })
+      .catch(() => {
+        // The card falls back to its empty state — nothing else breaks.
+      });
+  }, [session]);
+
   if (!session || planLoading) {
     return (
       <AppShell banner={<UpgradeBanner />}>
@@ -63,6 +83,7 @@ export function AnonHome() {
         bibleVersionId={session.bibleVersionId}
         isAnonymous
         reading={reading}
+        circle={circleName ? { heading: circleName, activity: [] } : null}
       />
     </AppShell>
   );

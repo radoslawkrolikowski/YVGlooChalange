@@ -1,25 +1,27 @@
 import { after, NextResponse } from "next/server";
 import { db } from "@/db";
 import { messages } from "@/db/schema";
-import { loadUserCircle } from "@/lib/circles";
+import { loadPublicCircle, loadUserCircle } from "@/lib/circles";
 import { screenReflection } from "@/lib/escalation";
 import { resolveSession } from "@/lib/session";
 import { translateNewMessage } from "@/lib/translation";
 
 export const dynamic = "force-dynamic";
 
-// Step 26 — post a (confirmed, recast) prayer to the user's circle thread as a
-// distinct member-authored `shared_prayer` card. Sharing is always explicit:
+// Step 26 — post a (confirmed, recast) prayer to the author's circle thread as
+// a distinct member-authored `shared_prayer` card. Sharing is always explicit:
 // the client shows the recast preview and a "your circle will see this" confirm
 // before calling this.
 //
 // Escalation runs first, as on any circle-posted content — a flagged recast is
 // never posted; the author gets the support card. The card is stored
-// member-authored (authorId = the user), so Step 27's Translation Agent covers
-// it for free once it ships.
+// member-authored, so Step 27's Translation Agent covers it.
 //
-// Circles are a signed-in feature (anonymous demo participation is Step 30), so
-// only a member with a YouVersion account may share here.
+// Step 30A opens sharing to an anonymous session inside the PUBLIC demo circle
+// — the one circle Path B may take part in (Step 30). Their card carries the
+// session id + "Reader #n" name instead of an authorId (no users row, brief §7)
+// and is pruned with the rest of the session's thread content on the Step 31
+// rail, exactly like their messages and reflections.
 
 const MAX_TEXT_LENGTH = 4000;
 
@@ -27,12 +29,6 @@ export async function POST(request: Request) {
   const session = await resolveSession(request);
   if (!session) {
     return NextResponse.json({ ok: false, error: "No valid session" }, { status: 401 });
-  }
-  if (session.kind !== "user") {
-    return NextResponse.json(
-      { ok: false, error: "Sharing to a circle requires a YouVersion account" },
-      { status: 403 },
-    );
   }
 
   let body: Record<string, unknown>;
@@ -50,7 +46,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "That prayer is too long" }, { status: 400 });
   }
 
-  const circle = await loadUserCircle(session.userId);
+  // The circle to share into: a member's own circle, or the public demo circle
+  // for an anonymous session.
+  const circle =
+    session.kind === "user"
+      ? await loadUserCircle(session.userId)
+      : await loadPublicCircle();
   if (!circle) {
     return NextResponse.json(
       { ok: false, error: "You are not in a circle to share with" },
@@ -78,7 +79,9 @@ export async function POST(request: Request) {
     .insert(messages)
     .values({
       circleId: circle.id,
-      authorId: session.userId,
+      authorId: session.kind === "user" ? session.userId : null,
+      anonSessionId: session.kind === "user" ? null : session.sessionId,
+      anonName: session.kind === "user" ? null : session.displayName,
       body: text,
       sourceLanguage: session.language ?? null,
       kind: "shared_prayer",

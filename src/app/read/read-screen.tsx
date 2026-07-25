@@ -18,11 +18,7 @@ import {
   SkeletonText,
   VersionAttribution,
 } from "@/components/ui";
-import {
-  loadAnonHighlights,
-  MAX_SESSION_HIGHLIGHT_LENGTH,
-  saveAnonHighlight,
-} from "@/lib/anon-highlights";
+import { MAX_SESSION_HIGHLIGHT_LENGTH } from "@/config/highlights";
 import type { PlanDay } from "@/lib/plans";
 import { HighlightablePassage } from "./highlightable-passage";
 import { NoteCard } from "./note-card";
@@ -107,7 +103,8 @@ export function ReadScreen({
   language: string | null;
   /** The session's stored version choice — pre-selects the switcher. */
   preferredVersionId: number | null;
-  /** Path B: highlights stay in sessionStorage, completion re-mints token. */
+  /** Path B: notes stay in sessionStorage, completion re-mints the token.
+   * Highlights are session-scoped rows on both paths since Step 30A. */
   isAnonymous: boolean;
   /** Whether this day is already marked complete (Step 14). */
   dayCompleted: boolean;
@@ -163,15 +160,12 @@ export function ReadScreen({
 
   // Load this passage's stored highlights, all versions at once — the render
   // filters to the version on display, so a version switch needs no refetch.
+  // One path for both session types (Step 30A): an anonymous session's
+  // highlights are session-scoped rows, resolved from its signed token.
   useEffect(() => {
-    if (isAnonymous) {
-      setHighlights(
-        loadAnonHighlights().filter((h) => h.reference === day.reference),
-      );
-      return;
-    }
     fetch(
       `/api/highlights/session?reference=${encodeURIComponent(day.reference)}`,
+      { headers: anonHeaders() },
     )
       .then((response) => response.json())
       .then((body) => {
@@ -180,7 +174,7 @@ export function ReadScreen({
       .catch(() => {
         // Stored highlights just don't render this visit; reading goes on.
       });
-  }, [day.reference, isAnonymous]);
+  }, [day.reference]);
 
   // A new highlight always belongs to the version actually on screen — after
   // a fallback fetch that is the fallback version, per the brief ("stored
@@ -201,17 +195,9 @@ export function ReadScreen({
       versionAbbreviation: result.passage.versionAbbreviation,
       text,
     };
-    if (isAnonymous) {
-      saveAnonHighlight({
-        ...entry,
-        attribution: result.attribution,
-        createdAt: new Date().toISOString(),
-      });
-      return;
-    }
     fetch("/api/highlights/session", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...anonHeaders() },
       body: JSON.stringify(entry),
     }).catch(() => {
       // Best-effort persistence; the on-screen wash already happened.

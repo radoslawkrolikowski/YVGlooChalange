@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { anonNameError, normaliseAnonName } from "@/config/anon-name";
 import {
   findSupportedVersion,
   SUPPORTED_LANGUAGES,
@@ -21,6 +22,13 @@ export const dynamic = "force-dynamic";
 // be a LICENSED member of SUPPORTED_VERSIONS for that language — an
 // unlicensed or unknown version can never be stored, so a stored selection
 // can never 403 on passage fetch.
+//
+// Step 30A: an anonymous session may also send `displayName`, the name it
+// chose in onboarding (required there, prefilled with the minted "Reader #n").
+// It is validated by the same shared rules the form applies, so a hand-rolled
+// request cannot smuggle in a blank, over-long, or "Round"-impersonating name.
+// Path A ignores the field entirely — a signed-in user is their YouVersion
+// display name.
 export async function POST(request: Request) {
   const session = await resolveSession(request);
   if (!session) {
@@ -30,7 +38,11 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { language?: unknown; bibleVersionId?: unknown };
+  let body: {
+    language?: unknown;
+    bibleVersionId?: unknown;
+    displayName?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -75,9 +87,27 @@ export async function POST(request: Request) {
     });
   }
 
+  // The chosen name. Omitted (settings saves that don't touch it) keeps the
+  // current one; sent, it must pass the same rules the form enforces.
+  let displayName: string | undefined;
+  if (body.displayName !== undefined) {
+    if (typeof body.displayName !== "string") {
+      return NextResponse.json(
+        { ok: false, error: "Choose a name for your circle" },
+        { status: 400 },
+      );
+    }
+    const error = anonNameError(body.displayName);
+    if (error) {
+      return NextResponse.json({ ok: false, error }, { status: 400 });
+    }
+    displayName = normaliseAnonName(body.displayName);
+  }
+
   const reminted = remintAnonSession(session, {
     language,
     bibleVersionId: version.id,
+    displayName,
   });
   return NextResponse.json({
     ok: true,

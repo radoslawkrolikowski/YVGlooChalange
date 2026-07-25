@@ -15,6 +15,10 @@ import type { PrayerDraft, PrayerIntent } from "./types";
  * the stream completes. A custom prompt flagged by Escalation shows the quiet
  * support card and no prayer. Sharing recasts the prayer to name the author,
  * previews it, and posts only on explicit confirm — never automatic.
+ *
+ * Both session paths behave identically (Step 30A): an anonymous visitor
+ * generates, copies, saves, and — inside the public demo circle — shares, with
+ * every artifact scoped to their session and nothing carried past it.
  */
 
 type Phase = "thinking" | "done" | "error" | "flagged";
@@ -48,9 +52,12 @@ export function PrayerSheet({
   open: boolean;
   onClose: () => void;
   intent: PrayerIntent;
+  /** Path B: the session token travels in a header on every call. */
   isAnonymous: boolean;
+  /** There is a circle to share into — the reader's own (Path A) or the public
+   * demo circle (Path B, Step 30A). Drives the Share affordance. */
   hasCircle: boolean;
-  /** Persist a kept prayer — Path A POST or Path B sessionStorage. */
+  /** Persist a kept prayer — a session-scoped row on either path. */
   onSave: (draft: PrayerDraft) => Promise<boolean>;
   onToast: (message: string) => void;
 }) {
@@ -286,7 +293,7 @@ export function PrayerSheet({
                   "Save"
                 )}
               </Button>
-              {hasCircle && !isAnonymous && (
+              {hasCircle && (
                 <Button
                   onClick={() => void startShare()}
                   disabled={!canAct || sharePhase === "recasting" || sharePhase === "shared"}

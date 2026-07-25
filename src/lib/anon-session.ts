@@ -26,7 +26,9 @@ export interface AnonSession {
   sessionId: string;
   /** From the atomic anon_reader_counter sequence. */
   readerNumber: number;
-  /** "Reader #n" — the name shown on any circle message they post. */
+  /** The name shown on any circle message they post and in any prayer Round
+   * recasts for them. Minted as "Reader #n"; onboarding (Step 30A) asks for a
+   * name of their own, prefilled with this, and re-mints the token. */
   displayName: string;
   /** Default until changed in onboarding (Step 9): English. */
   language: string;
@@ -50,6 +52,13 @@ export interface AnonSession {
    * has no database row.
    */
   profile?: ProfileAnswers;
+  /**
+   * The circle this session has joined — only ever the public demo circle
+   * (Step 30). Path A membership is a `circle_members` row; Path B has no user
+   * row to key one to, so membership lives here, in the token, and ends with
+   * the session like everything else anonymous. Null until they join.
+   */
+  circleId?: string | null;
   issuedAt: number;
 }
 
@@ -88,20 +97,28 @@ export function mintAnonSession(readerNumber: number): {
 }
 
 /**
- * Re-mints an existing anonymous session with new reading preferences
- * (Step 9). The session has no database row, so "updating" it means issuing
- * a replacement signed token; identity fields (sessionId, readerNumber,
- * displayName, issuedAt) carry over unchanged so the visitor stays the same
- * Reader for the whole browser session.
+ * Re-mints an existing anonymous session with new reading preferences (Step 9)
+ * and, since Step 30A, the name the visitor chose for themselves. The session
+ * has no database row, so "updating" it means issuing a replacement signed
+ * token; sessionId, readerNumber and issuedAt carry over unchanged so the
+ * visitor stays the same session throughout — only what they see and are
+ * called changes. Already-posted messages keep the name they were written
+ * under: those rows are immutable, as every authored row in Round is.
  */
 export function remintAnonSession(
   current: AnonSession,
-  preferences: { language: string; bibleVersionId: number },
+  preferences: {
+    language: string;
+    bibleVersionId: number;
+    /** Validated, normalised name; absent leaves the current one. */
+    displayName?: string;
+  },
 ): { token: string; session: AnonSession } {
   const session: AnonSession = {
     ...current,
     language: preferences.language,
     bibleVersionId: preferences.bibleVersionId,
+    displayName: preferences.displayName ?? current.displayName,
     onboarded: true,
   };
   return { token: signSession(session), session };
@@ -149,6 +166,29 @@ export function remintAnonDayComplete(
   return { token: signSession(session), session };
 }
 
+/**
+ * Re-mints the session as a member of `circleId`, with its reading aligned to
+ * the circle's plan — Path B's equivalent of the Step 16 join, which writes a
+ * `circle_members` row and calls alignActivePlan. Joining the circle a visitor
+ * is already in keeps their progress; joining onto a different plan starts that
+ * plan fresh, because the token carries exactly one plan and an anonymous
+ * session has no plan history to pause into (Step 12A).
+ */
+export function remintAnonCircleJoin(
+  current: AnonSession,
+  circle: { circleId: string; planId: string },
+): { token: string; session: AnonSession } {
+  const keepsProgress = current.plan?.planId === circle.planId;
+  const session: AnonSession = {
+    ...current,
+    circleId: circle.circleId,
+    plan: keepsProgress
+      ? current.plan
+      : { planId: circle.planId, startedAt: Date.now(), completedDays: [] },
+  };
+  return { token: signSession(session), session };
+}
+
 export function remintAnonProfile(
   current: AnonSession,
   profile: ProfileAnswers,
@@ -178,8 +218,13 @@ export function verifyAnonSessionToken(token: string): AnonSession | null {
       Buffer.from(payload, "base64url").toString("utf8"),
     ) as AnonSession;
     if (session.kind !== "anonymous") return null;
-    // Tokens minted before Step 11 have no `plan` key; normalise to null.
-    return { ...session, plan: session.plan ?? null };
+    // Tokens minted before Step 11 have no `plan` key, and before the public
+    // circle no `circleId`; normalise both to null.
+    return {
+      ...session,
+      plan: session.plan ?? null,
+      circleId: session.circleId ?? null,
+    };
   } catch {
     return null;
   }

@@ -19,6 +19,13 @@ import { CircleThread } from "./thread";
  * once, and renders the shared CircleThread with the anon token so its polling
  * and posting carry the header. A 403 (this isn't the public circle, or no
  * valid session) sends the visitor back to /circles rather than a dead end.
+ *
+ * Step 30A: arriving here also records membership in the token, so a visitor
+ * who deep-links or is routed straight into the thread is a member of the
+ * circle everywhere else too — /circles says "Open circle", and /plan and /read
+ * show the circle's reading. The join is skipped when it would silently replace
+ * a plan the visitor chose themselves: that case returns `plan_switch` and is
+ * confirmed on the /circles card instead, never here behind their back.
  */
 export function AnonCircleThread({ circleId }: { circleId: string }) {
   const session = useAnonSession();
@@ -35,29 +42,60 @@ export function AnonCircleThread({ circleId }: { circleId: string }) {
   >({ status: "loading" });
 
   useEffect(() => {
-    const token = sessionStorage.getItem(ANON_TOKEN_STORAGE_KEY);
-    if (!token) {
+    const stored = sessionStorage.getItem(ANON_TOKEN_STORAGE_KEY);
+    if (!stored) {
       router.replace("/");
       return;
     }
-    fetch(`/api/circles/${circleId}/messages`, {
-      headers: { "x-round-session": token },
-    })
-      .then(async (response) => {
-        const body = await response.json();
-        if (!response.ok || !body.ok || !body.circle) {
-          router.replace("/circles");
-          return;
-        }
-        setState({
-          status: "ready",
-          token,
-          circle: body.circle as ThreadCircle,
-          messages: body.messages as ThreadMessage[],
-          reflectionDay: (body.reflectionDay as CirclePlanDay | null) ?? null,
+
+    /** Record membership unless it would swap a chosen plan; returns the token
+     * to read the thread with (the re-minted one when the join landed). */
+    async function ensureMembership(token: string): Promise<string> {
+      try {
+        const response = await fetch(`/api/circles/${circleId}/join`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-round-session": token,
+          },
+          body: JSON.stringify({}),
         });
-      })
+        const body = await response.json();
+        if (body.ok && body.token) {
+          sessionStorage.setItem(ANON_TOKEN_STORAGE_KEY, body.token);
+          return body.token as string;
+        }
+      } catch {
+        // Reading the thread never depends on the join — fall through.
+      }
+      return token;
+    }
+
+    let cancelled = false;
+    ensureMembership(stored)
+      .then((token) =>
+        fetch(`/api/circles/${circleId}/messages`, {
+          headers: { "x-round-session": token },
+        }).then(async (response) => {
+          const body = await response.json();
+          if (cancelled) return;
+          if (!response.ok || !body.ok || !body.circle) {
+            router.replace("/circles");
+            return;
+          }
+          setState({
+            status: "ready",
+            token,
+            circle: body.circle as ThreadCircle,
+            messages: body.messages as ThreadMessage[],
+            reflectionDay: (body.reflectionDay as CirclePlanDay | null) ?? null,
+          });
+        }),
+      )
       .catch(() => router.replace("/circles"));
+    return () => {
+      cancelled = true;
+    };
   }, [circleId, router]);
 
   if (state.status === "loading" || !session) {

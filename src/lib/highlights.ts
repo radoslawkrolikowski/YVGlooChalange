@@ -391,10 +391,20 @@ export async function revokeHighlights(userId: string): Promise<void> {
   await recordHighlightsConsent(userId, "revoked");
 }
 
-// --- In-app session highlights (Step 14) ----------------------------------
+// --- In-app session highlights (Steps 14 and 30A) --------------------------
+//
+// Owner-scoped, not user-scoped: Step 30A routes anonymous Instant Access
+// sessions through this exact code, tagging their rows with the session id
+// instead of a user id (src/lib/session-owner.ts). Nothing else differs — the
+// same create, the same reads, the same privacy rule (owner's eyes only).
 
-export { MAX_SESSION_HIGHLIGHT_LENGTH } from "@/lib/anon-highlights";
-import { MAX_SESSION_HIGHLIGHT_LENGTH } from "@/lib/anon-highlights";
+export { MAX_SESSION_HIGHLIGHT_LENGTH } from "@/config/highlights";
+import { MAX_SESSION_HIGHLIGHT_LENGTH } from "@/config/highlights";
+import {
+  ownerColumns,
+  ownerWhere,
+  type SessionOwner,
+} from "@/lib/session-owner";
 
 /** One phrase highlighted while reading in Round — owner's eyes only. */
 export interface SessionHighlight {
@@ -412,12 +422,12 @@ export interface SessionHighlight {
 }
 
 /**
- * Stores one in-app highlight (Path A). The selected text lands in `snippet`
- * with `snippetVersionId = versionId`: unlike imports, the text was captured
- * from the version actually on screen, so the two can never differ.
+ * Stores one in-app highlight for either session path. The selected text lands
+ * in `snippet` with `snippetVersionId = versionId`: unlike imports, the text
+ * was captured from the version actually on screen, so the two can never differ.
  */
 export async function createSessionHighlight(
-  userId: string,
+  owner: SessionOwner,
   input: {
     reference: string;
     label: string | null;
@@ -430,7 +440,7 @@ export async function createSessionHighlight(
   const [row] = await db
     .insert(highlights)
     .values({
-      userId,
+      ...ownerColumns(owner),
       reference: input.reference,
       label: input.label,
       versionId: input.versionId,
@@ -452,12 +462,12 @@ export async function createSessionHighlight(
 }
 
 /**
- * The user's in-app highlights for one passage reference, across all
+ * The owner's in-app highlights for one passage reference, across all
  * versions (the reading screen filters to the version on display). Private
  * to the owner; never joined into any circle-facing view.
  */
 export async function listSessionHighlights(
-  userId: string,
+  owner: SessionOwner,
   reference: string,
 ): Promise<SessionHighlight[]> {
   const rows = await db
@@ -473,7 +483,7 @@ export async function listSessionHighlights(
     .from(highlights)
     .where(
       and(
-        eq(highlights.userId, userId),
+        ownerWhere(highlights.userId, highlights.anonSessionId, owner),
         eq(highlights.source, "in_app"),
         eq(highlights.reference, reference),
       ),
@@ -497,12 +507,12 @@ export interface SessionHighlightListEntry extends SessionHighlight {
 }
 
 /**
- * Every in-app highlight the user has made, newest first, with copyright
+ * Every in-app highlight the owner has made, newest first, with copyright
  * attributions resolved — the profile's "Highlighted in Round" section.
  * Owner's eyes only, like everything else in this table.
  */
 export async function loadSessionHighlightList(
-  userId: string,
+  owner: SessionOwner,
 ): Promise<SessionHighlightListEntry[]> {
   const rows = await db
     .select({
@@ -516,7 +526,10 @@ export async function loadSessionHighlightList(
     })
     .from(highlights)
     .where(
-      and(eq(highlights.userId, userId), eq(highlights.source, "in_app")),
+      and(
+        ownerWhere(highlights.userId, highlights.anonSessionId, owner),
+        eq(highlights.source, "in_app"),
+      ),
     )
     .orderBy(desc(highlights.importedAt), desc(highlights.id));
 

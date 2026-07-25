@@ -3,17 +3,28 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ANON_TOKEN_STORAGE_KEY } from "@/app/instant-access-button";
 import {
+  anonNameError,
+  MAX_ANON_NAME_LENGTH,
+  normaliseAnonName,
+} from "@/config/anon-name";
+import {
   effectiveVersionId,
   findSupportedVersion,
   SUPPORTED_LANGUAGES,
   versionsForLanguage,
 } from "@/config/bible-versions";
-import { Badge, Banner, Button, SelectionCard } from "@/components/ui";
+import { Badge, Banner, Button, SelectionCard, TextInput } from "@/components/ui";
 import type { Session } from "@/lib/session";
 
 /*
- * Language + Bible version picker (Step 9) — the one form behind both the
- * onboarding screen and the reading settings screen.
+ * Name + language + Bible version (Step 9; the name added in Step 30A) — the
+ * one form behind both the onboarding screen and the reading settings screen.
+ *
+ * The name field renders for anonymous sessions only, where it is REQUIRED:
+ * every circle message, avatar, greeting, and prayer Round recasts uses it, so
+ * a session must always have one. It ships prefilled with the assigned
+ * "Reader #n" — keeping that is a valid answer, blanking it is not. A signed-in
+ * user has their YouVersion display name and never sees the field.
  *
  * The version list renders instantly from SUPPORTED_VERSIONS (the config the
  * client already ships with — Decisions: config is the source of truth),
@@ -52,11 +63,15 @@ function defaultSelection(language: string, preferredId: number | null): number 
 export function ReadingPreferencesForm({
   initialLanguage,
   initialVersionId,
+  initialDisplayName = null,
   submitLabel,
   onSaved,
 }: {
   initialLanguage: string | null;
   initialVersionId: number | null;
+  /** Anonymous sessions only: the current name, prefilling the required field.
+   * Null (Path A) hides the field — a signed-in user's name is YouVersion's. */
+  initialDisplayName?: string | null;
   submitLabel: string;
   onSaved: (session: Session) => void;
 }) {
@@ -68,8 +83,15 @@ export function ReadingPreferencesForm({
   const [versionId, setVersionId] = useState(() =>
     defaultSelection(startLanguage, initialVersionId),
   );
+  const [displayName, setDisplayName] = useState(initialDisplayName ?? "");
+  // Errors surface only after a first submit attempt or a blur — typing into a
+  // prefilled field should not scold you mid-word.
+  const [nameTouched, setNameTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const namesSession = initialDisplayName !== null;
+  const nameError = namesSession ? anonNameError(displayName) : null;
 
   // Live-catalogue enrichment per language: null = check in flight or not
   // started, "failed" = catalogue unreachable (curated config stands alone).
@@ -110,6 +132,10 @@ export function ReadingPreferencesForm({
   );
 
   async function save() {
+    if (nameError) {
+      setNameTouched(true);
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     try {
@@ -122,7 +148,14 @@ export function ReadingPreferencesForm({
       const response = await fetch("/api/session/preferences", {
         method: "POST",
         headers,
-        body: JSON.stringify({ language, bibleVersionId: versionId }),
+        body: JSON.stringify({
+          language,
+          bibleVersionId: versionId,
+          // Path A never sends a name — its identity is YouVersion's.
+          ...(namesSession
+            ? { displayName: normaliseAnonName(displayName) }
+            : {}),
+        }),
       });
       const body = await response.json();
       if (!body.ok) throw new Error(body.error ?? "Could not save");
@@ -144,6 +177,21 @@ export function ReadingPreferencesForm({
 
   return (
     <div className="flex flex-col gap-6">
+      {namesSession && (
+        <TextInput
+          label="Your name in the circle"
+          value={displayName}
+          onChange={(event) => setDisplayName(event.target.value)}
+          onBlur={() => setNameTouched(true)}
+          maxLength={MAX_ANON_NAME_LENGTH}
+          autoComplete="off"
+          required
+          aria-required
+          error={nameTouched && nameError ? nameError : undefined}
+          helper="How other readers see you, and how Round names you in a prayer. Nothing is kept after this session."
+        />
+      )}
+
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-faint">
           Language
@@ -206,7 +254,7 @@ export function ReadingPreferencesForm({
 
       {saveError && <Banner tone="error">{saveError}</Banner>}
 
-      <Button full onClick={save} disabled={saving}>
+      <Button full onClick={save} disabled={saving || nameError !== null}>
         {saving ? "Saving…" : submitLabel}
       </Button>
     </div>

@@ -3,9 +3,11 @@
 import { ArrowRight, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ANON_TOKEN_STORAGE_KEY } from "@/app/instant-access-button";
 import { AppShell } from "@/components/layout/app-shell";
 import { HeaderMenu } from "@/components/layout/header-menu";
 import {
+  Banner,
   Card,
   EmptyState,
   RoundAvatar,
@@ -14,14 +16,23 @@ import {
 } from "@/components/ui";
 import { useAnonSession } from "@/lib/use-anon-session";
 import { UpgradeBanner } from "../home/upgrade-banner";
+import { PlanSwitchDialog } from "./plan-switch-dialog";
 
 /*
- * Path B /circles tab (Step 16; Step 30). An Instant Access visitor has no user
- * row, so creating and joining a matched circle still need a YouVersion account
- * — but the PUBLIC demo circle ("Public Round Circle — Psalms") is open to
- * anyone in one tap (Step 30). This screen leads with that: read, reflect, and
- * converse with a live AI member and other visitors, no sign-up. Signing in is
- * offered as the way to a private matched circle, never as a gate to the demo.
+ * Path B /circles tab (Step 16; Steps 30 and 30A). An Instant Access visitor
+ * has no user row, so creating and joining a matched circle still need a
+ * YouVersion account — but the PUBLIC demo circle ("Public Round Circle —
+ * Psalms") is open to anyone in one tap (Step 30). This screen leads with that:
+ * read, reflect, and converse with a live AI member and other visitors, no
+ * sign-up. Signing in is offered as the way to a private matched circle, never
+ * as a gate to the demo.
+ *
+ * Joining is real membership, not navigation (Step 30A): it records the circle
+ * in the signed token and takes on the circle's reading plan, so /plan, /read
+ * and Home show the circle's passage. The card therefore knows whether this
+ * session has already joined and says "Open circle" instead of asking again. A
+ * visitor who had picked their own plan gets the same explicit switch prompt a
+ * member does — never a silent swap.
  */
 
 interface PublicCircle {
@@ -34,6 +45,11 @@ export function AnonCircles() {
   const router = useRouter();
   const [publicCircle, setPublicCircle] = useState<PublicCircle | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [planSwitch, setPlanSwitch] = useState<{ planName: string } | null>(
+    null,
+  );
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/circles/public")
@@ -46,6 +62,45 @@ export function AnonCircles() {
       })
       .finally(() => setLoaded(true));
   }, []);
+
+  const joined = Boolean(
+    session && publicCircle && session.circleId === publicCircle.id,
+  );
+
+  async function join(confirmPlanSwitch = false) {
+    if (!publicCircle) return;
+    setJoining(true);
+    setError(null);
+    try {
+      const token = sessionStorage.getItem(ANON_TOKEN_STORAGE_KEY);
+      const response = await fetch(`/api/circles/${publicCircle.id}/join`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { "x-round-session": token } : {}),
+        },
+        body: JSON.stringify({ confirmPlanSwitch }),
+      });
+      const body = await response.json();
+      if (body.reason === "plan_switch") {
+        setPlanSwitch({ planName: body.planName as string });
+        return;
+      }
+      if (!body.ok) {
+        setError(body.error ?? "Could not join the circle. Please try again.");
+        return;
+      }
+      if (body.token) {
+        sessionStorage.setItem(ANON_TOKEN_STORAGE_KEY, body.token);
+      }
+      router.push(`/circles/${publicCircle.id}`);
+    } catch {
+      setError("Could not join the circle. Please try again.");
+    } finally {
+      setJoining(false);
+      setPlanSwitch(null);
+    }
+  }
 
   if (!session) {
     return (
@@ -76,18 +131,24 @@ export function AnonCircles() {
                   {publicCircle.name}
                 </h2>
                 <p className="mt-1 text-sm text-ink-soft">
-                  An open circle reading the Psalms together. Read the
-                  reflections and digest, share your own, and talk it over — no
-                  account needed.
+                  {joined
+                    ? "You're reading with this circle. Pick up the conversation where you left it."
+                    : "An open circle reading the Psalms together. Read the reflections and digest, share your own, and talk it over — no account needed."}
                 </p>
               </div>
             </div>
+            {error && <Banner tone="error">{error}</Banner>}
             <button
               type="button"
-              onClick={() => router.push(`/circles/${publicCircle.id}`)}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-base font-semibold text-ivory shadow-raised transition-all hover:bg-primary-dark"
+              disabled={joining}
+              onClick={() =>
+                joined
+                  ? router.push(`/circles/${publicCircle.id}`)
+                  : void join()
+              }
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-base font-semibold text-ivory shadow-raised transition-all hover:bg-primary-dark disabled:opacity-60"
             >
-              Join in one tap
+              {joining ? "Joining…" : joined ? "Open circle" : "Join in one tap"}
               <ArrowRight size={18} aria-hidden />
             </button>
           </Card>
@@ -99,6 +160,19 @@ export function AnonCircles() {
           />
         )}
       </div>
+
+      {planSwitch && publicCircle && (
+        <PlanSwitchDialog
+          prompt={{
+            circleName: publicCircle.name,
+            planName: planSwitch.planName,
+          }}
+          isAnonymous
+          busy={joining}
+          onConfirm={() => void join(true)}
+          onCancel={() => setPlanSwitch(null)}
+        />
+      )}
     </AppShell>
   );
 }
