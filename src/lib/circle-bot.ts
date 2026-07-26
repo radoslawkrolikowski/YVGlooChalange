@@ -50,7 +50,7 @@ const MAX_CONTEXT_MESSAGES = 8;
 const MAX_PASSAGE_CHARS = 4000;
 
 /** The responding bot's users id, or null when the demo isn't seeded. */
-async function loadResponderBotId(): Promise<string | null> {
+export async function loadResponderBotId(): Promise<string | null> {
   const [row] = await db
     .select({ value: appMeta.value })
     .from(appMeta)

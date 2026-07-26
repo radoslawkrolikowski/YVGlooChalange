@@ -69,8 +69,11 @@ export function AnonPruneControl() {
       <p className="text-sm text-ink-soft">
         Deletes every row tagged with an anonymous session id — reflections,
         thread messages, in-app highlights, saved prayers, and notifications.
-        Seeded bot and member content is owned by user rows and survives. Step 31
-        runs this same helper daily; this button is the manual trigger.
+        Seeded bot and member content is owned by user rows and survives. This
+        button prunes with a cutoff of <em>now</em>, so it removes even a
+        reflection just submitted; the Step 31 demo-refresh sweep runs the same
+        helper daily with a cutoff of the <em>previous refresh</em>, so nothing
+        is ever deleted out from under a visitor who is mid-session.
       </p>
       <Button className="self-start" disabled={state.running} onClick={prune}>
         {state.running ? "Pruning…" : "Prune anonymous data"}
