@@ -65,7 +65,7 @@ const cronJobs: {
     job: "demo-refresh",
     displayName: "Demo refresh",
     description:
-      "Daily. Inactive until Step 31 lands the demo circle — the secured route and cron slot already exist.",
+      "Daily, two targets. Prunes anonymous-session data older than the previous refresh (global — it runs even before the demo circle is seeded), then re-dates the public demo circle's seeded posts to today and regenerates its conversation starters, digest and lesson summary through real Gloo calls, so the wording varies day to day.",
     schedule: "daily · via daily sweep",
     names: ["demo-refresh"],
   },

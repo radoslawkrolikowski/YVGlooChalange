@@ -7,14 +7,19 @@
 // later steps AFTER a successful claim: Facilitator+Summary in Step 24,
 // Reminder delivery in Step 29, Health in Step 34, demo refresh in Step 31 —
 // so in this step a sweep's only write is the claim row, which is exactly
-// what makes the idempotency provable in isolation.
+// what makes the idempotency provable in isolation. (Health is still a claim
+// and nothing else, until Step 34 implements the agent.)
 
 import { and, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { agentRuns, circles, userPlanProgress, users } from "@/db/schema";
-import { CIRCLE_KIND_PUBLIC } from "@/lib/circles";
+import { CIRCLE_KIND_PUBLIC, loadPublicCircle } from "@/lib/circles";
 import { dailyPeriodKey, halfDayPeriodKey } from "@/lib/cron";
 import { runCircleCompanion } from "@/lib/companion";
+import {
+  pruneAnonymousSessions,
+  refreshDemoCircle,
+} from "@/lib/demo-refresh";
 import { runCircleDigest } from "@/lib/digest";
 import { runUserReminders } from "@/lib/reminders";
 
@@ -42,6 +47,13 @@ export type CronJobName =
   | "health"
   | "companion"
   | "demo-refresh";
+
+/**
+ * The demo refresh's non-circle target (Step 31): anonymous-session data is
+ * global, not owned by any circle, so it claims its own agent_runs row under a
+ * fixed id. A literal rather than a uuid because there is exactly one of it.
+ */
+export const ANON_PRUNE_TARGET = "anonymous-sessions";
 
 /**
  * Claims agent_runs rows for every target: the first sweep of a period
@@ -275,15 +287,102 @@ export async function companionSweep(): Promise<SweepResult> {
 }
 
 /**
- * Daily demo refresh — inactive until Step 31 (no demo circle exists yet).
- * The secured route and cron slot exist now so Step 31 only fills in the
- * work; nothing is claimed here, so Step 31's first real run starts clean.
+ * Daily demo refresh (Step 31) — two targets, claimed independently so one can
+ * run when the other cannot:
+ *
+ *   * ANON_PRUNE_TARGET — delete anonymous-session data older than the previous
+ *     refresh. Global, not circle-scoped: an Instant Access visitor can save a
+ *     prayer or make a highlight without ever joining the demo circle, so this
+ *     runs even when the circle has not been seeded.
+ *   * the public demo circle — re-date its seeded content to today and
+ *     regenerate its starters, digest and lesson summary through real Gloo
+ *     calls, so the demo always reads as alive *today* and its wording varies
+ *     day to day.
+ *
+ * Both claim an agent_runs row first, so a second trigger inside the same day
+ * reports "already ran", spends no Gloo call, and deletes nothing further. A
+ * failure releases its own claim so the next run retries.
  */
 export async function demoRefreshSweep(): Promise<SweepResult> {
-  return summarise(
-    "demo-refresh",
-    dailyPeriodKey(),
-    [],
-    "Inactive until Step 31 — the demo circle does not exist yet.",
-  );
+  const periodKey = dailyPeriodKey();
+  const now = new Date();
+  const targets: SweepTarget[] = [];
+
+  const releaseClaim = (targetId: string) =>
+    db
+      .delete(agentRuns)
+      .where(
+        and(
+          eq(agentRuns.agentName, "demo-refresh"),
+          eq(agentRuns.targetId, targetId),
+          eq(agentRuns.periodKey, periodKey),
+        ),
+      )
+      .catch(() => {
+        // Keep the claim if the release fails — no retry, but no crash.
+      });
+
+  // --- Anonymous prune ------------------------------------------------------
+  const [pruneClaim] = await db
+    .insert(agentRuns)
+    .values({
+      agentName: "demo-refresh",
+      targetId: ANON_PRUNE_TARGET,
+      periodKey,
+    })
+    .onConflictDoNothing()
+    .returning({ id: agentRuns.id });
+  if (!pruneClaim) {
+    targets.push({ targetId: ANON_PRUNE_TARGET, status: "already_ran" });
+  } else {
+    try {
+      const prune = await pruneAnonymousSessions(now);
+      targets.push({
+        targetId: ANON_PRUNE_TARGET,
+        status: "ran",
+        detail: `pruned ${prune.total} anonymous rows older than ${prune.cutoff.toISOString()}`,
+      });
+    } catch (error) {
+      await releaseClaim(ANON_PRUNE_TARGET);
+      targets.push({
+        targetId: ANON_PRUNE_TARGET,
+        status: "ran",
+        detail: `prune failed: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  }
+
+  // --- Demo circle refresh --------------------------------------------------
+  const circle = await loadPublicCircle();
+  if (!circle) {
+    return summarise(
+      "demo-refresh",
+      periodKey,
+      targets,
+      "No public demo circle is seeded — seed it from the Agent Console (Step 30). The anonymous prune above runs regardless.",
+    );
+  }
+
+  const [circleClaim] = await db
+    .insert(agentRuns)
+    .values({ agentName: "demo-refresh", targetId: circle.id, periodKey })
+    .onConflictDoNothing()
+    .returning({ id: agentRuns.id });
+  if (!circleClaim) {
+    targets.push({ targetId: circle.id, status: "already_ran" });
+    return summarise("demo-refresh", periodKey, targets);
+  }
+
+  const outcome = await refreshDemoCircle(circle.id, now);
+  if (outcome.errored) {
+    // Release the claim so a later run can retry the regeneration.
+    await releaseClaim(circle.id);
+  }
+  targets.push({
+    targetId: circle.id,
+    status: "ran",
+    detail: outcome.detail,
+  });
+
+  return summarise("demo-refresh", periodKey, targets);
 }

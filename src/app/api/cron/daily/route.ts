@@ -27,10 +27,17 @@ export async function GET(request: Request) {
   }
   // Sequential on purpose: predictable ordering, and each sweep's claims are
   // independent — one cadence failing must not mask the others' results.
+  //
+  // The demo refresh goes FIRST (Step 31). It deletes the demo circle's digest
+  // before regenerating it, so running the Facilitator afterwards is a free
+  // safety net: in the ordinary case the fresh digest already holds the
+  // (circle, day) claim and the Facilitator no-ops without spending a Gloo
+  // call, and in the rare case the regeneration failed the Facilitator posts
+  // the day's digest instead — the demo circle is never left without one.
   const results = [
+    await demoRefreshSweep(),
     await facilitatorSweep(),
     await reminderSweep(),
-    await demoRefreshSweep(),
   ];
   return NextResponse.json({ ok: true, results });
 }
