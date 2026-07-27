@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "corpus:split": "node scripts/split-psalms-commentary.mts",
+    "corpus:upload": "node --env-file-if-exists=.env.local scripts/upload-corpus.mts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.2",
