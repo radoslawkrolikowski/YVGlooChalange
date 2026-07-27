@@ -22,6 +22,15 @@ const TOKEN_URL = "https://platform.ai.gloo.com/oauth2/token";
 const COMPLETIONS_URL = "https://platform.ai.gloo.com/ai/v2/chat/completions";
 /** Grounded Completions (RAG) is a separate path, not a flag on the above. */
 const GROUNDED_COMPLETIONS_URL = `${COMPLETIONS_URL}/grounded`;
+/**
+ * Search (Data Engine retrieval, Pro plan). Returns chunk-level hits with the
+ * parent item's identity attached, which is what lets a caller scope retrieval
+ * to one corpus file instead of hoping semantic similarity stays on topic —
+ * see searchCorpus() below.
+ */
+const SEARCH_URL = "https://platform.ai.gloo.com/ai/v1/data/search";
+/** The only collection Gloo exposes for Data Engine content. */
+const SEARCH_COLLECTION = "GlooProd";
 
 /** Stored in agent_logs.output_preview — a reference, never the full text. */
 const OUTPUT_PREVIEW_CHARS = 500;
@@ -436,6 +445,166 @@ export async function groundedCompletion(
   return completionWithRetryAndLog(options, () =>
     requestGroundedCompletion(options),
   );
+}
+
+/** One retrieved chunk from the corpus, with its parent item's identity. */
+export interface GlooSearchChunk {
+  /**
+   * The parent item's file name, e.g. "psalm-023.md" — the ONLY reliable scope
+   * key. `producer_id` comes back null on search results, so callers filter on
+   * this. Because the corpus is one item per Psalm, matching it is exact.
+   */
+  filename: string | null;
+  /** e.g. "Treasury of David — Psalm 23"; used for source attribution. */
+  itemTitle: string | null;
+  /** Chunk index within the parent item — sort by this to restore reading order. */
+  part: number | null;
+  /** The chunk text. */
+  snippet: string;
+  /** Gloo's similarity score for this chunk, 0–1. */
+  certainty: number | null;
+  itemId: string | null;
+}
+
+export interface GlooSearchOptions {
+  /** Agent making the call — recorded on every agent_logs row. */
+  agentName: string;
+  /** Semantic query. Name passages in human form ("Psalm 23"); USFM matches nothing. */
+  query: string;
+  /**
+   * Chunks to return before client-side filtering. Server-side filtering does
+   * not exist (producer_id / item_title / filters / where in the body are
+   * silently ignored), so the pattern is: over-fetch wide, then filter by
+   * filename. Default 100.
+   */
+  limit?: number;
+  /** Minimum similarity, 0–1. Default 0 — let the filename filter do the work. */
+  certainty?: number;
+  /**
+   * Normalised publisher name, underscores NOT hyphens ("scripture_commentary").
+   * Defaults to GLOO_SEARCH_TENANT.
+   */
+  tenant?: string;
+}
+
+interface GlooSearchResponse {
+  data?: Array<{
+    metadata?: { certainty?: number };
+    properties?: {
+      filename?: string | null;
+      item_title?: string | null;
+      part?: number | null;
+      snippet?: string | null;
+      item_id?: string | null;
+    };
+  }>;
+}
+
+async function requestSearch(
+  options: GlooSearchOptions,
+): Promise<GlooSearchChunk[]> {
+  const tenant = options.tenant ?? process.env.GLOO_SEARCH_TENANT;
+  if (!tenant) {
+    throw new Error(
+      "GLOO_SEARCH_TENANT is not set and no tenant was passed — see .env.example",
+    );
+  }
+
+  const accessToken = await getAccessToken();
+  const response = await fetch(SEARCH_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      collection: SEARCH_COLLECTION,
+      tenant,
+      query: options.query,
+      limit: options.limit ?? 100,
+      certainty: options.certainty ?? 0,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    if (response.status === 401) cachedToken = null;
+    throw new GlooApiError(
+      // A 403 here is almost always the tenant string: the normalised name uses
+      // underscores, and the hyphenated publisher name is rejected outright.
+      `Gloo search failed (${response.status})`,
+      response.status,
+      body,
+    );
+  }
+
+  const parsed = (await response.json()) as GlooSearchResponse;
+  return (parsed.data ?? []).map((hit) => ({
+    filename: hit.properties?.filename ?? null,
+    itemTitle: hit.properties?.item_title ?? null,
+    part: hit.properties?.part ?? null,
+    snippet: hit.properties?.snippet ?? "",
+    certainty: hit.metadata?.certainty ?? null,
+    itemId: hit.properties?.item_id ?? null,
+  }));
+}
+
+/**
+ * Search the Data Engine corpus for chunks (Step 32).
+ *
+ * This is the retrieval half of the Search + Completions V2 path: callers
+ * filter the returned chunks to the one corpus file their passage maps to, sort
+ * by `part`, and pass the survivors to chatCompletion(). Scoping is therefore
+ * by item IDENTITY, not by semantic similarity — no chunk from a neighbouring
+ * Psalm can reach a prompt, and zero survivors is a definitive "not covered"
+ * rather than an inference. Measured against the live corpus, this recovers
+ * ~74% of a Psalm's commentary where the one-call grounded path returned ~7%.
+ *
+ * Logged to agent_logs like every other Gloo call. There is no model and no
+ * token usage on a search, so those columns stay null and the preview records
+ * what came back instead.
+ */
+export async function searchCorpus(
+  options: GlooSearchOptions,
+): Promise<GlooSearchChunk[]> {
+  const startedAt = Date.now();
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const chunks = await requestSearch(options);
+      const files = new Set(chunks.map((chunk) => chunk.filename));
+      await writeAgentLog({
+        agentName: options.agentName,
+        model: null,
+        status: "ok",
+        outputPreview: `search "${options.query}" → ${chunks.length} chunks from ${files.size} item(s)`.slice(
+          0,
+          OUTPUT_PREVIEW_CHARS,
+        ),
+        latencyMs: Date.now() - startedAt,
+      });
+      return chunks;
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_ATTEMPTS && isTransient(error)) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, RETRY_BASE_DELAY_MS * 2 ** (attempt - 1)),
+        );
+        continue;
+      }
+      break;
+    }
+  }
+
+  await writeAgentLog({
+    agentName: options.agentName,
+    model: null,
+    status: "error",
+    error: lastError instanceof Error ? lastError.message : String(lastError),
+    latencyMs: Date.now() - startedAt,
+  });
+  throw lastError;
 }
 
 /** One text delta yielded by chatCompletionStream while the model generates. */
