@@ -20,6 +20,8 @@ import { agentLogs } from "@/db/schema";
 
 const TOKEN_URL = "https://platform.ai.gloo.com/oauth2/token";
 const COMPLETIONS_URL = "https://platform.ai.gloo.com/ai/v2/chat/completions";
+/** Grounded Completions (RAG) is a separate path, not a flag on the above. */
+const GROUNDED_COMPLETIONS_URL = `${COMPLETIONS_URL}/grounded`;
 
 /** Stored in agent_logs.output_preview — a reference, never the full text. */
 const OUTPUT_PREVIEW_CHARS = 500;
@@ -77,7 +79,11 @@ export interface GlooCompletionOptions {
   model?: string;
   temperature?: number;
   maxTokens?: number;
-  /** Gloo faith-tradition steering, e.g. "not_faith_specific" (default). */
+  /**
+   * Gloo faith-tradition steering. Omit to leave it to Gloo — there is no
+   * client-side default, and "not_faith_specific" specifically cannot be
+   * combined with auto-routing (see completionBody).
+   */
   tradition?: "evangelical" | "catholic" | "mainline" | "not_faith_specific";
 }
 
@@ -88,6 +94,41 @@ export interface GlooCompletion {
   model: string;
   promptTokens?: number;
   completionTokens?: number;
+}
+
+/** One retrieved source behind a grounded completion, as Gloo reports it. */
+export interface GlooCitation {
+  /**
+   * The Content Library item the retrieved chunk belongs to. Chunks are the
+   * retrieval unit but attribution is item-level, which is why the corpus is
+   * ingested one item per Psalm: this title is the only signal a caller has
+   * for which passage the grounding actually came from.
+   */
+  itemTitle: string;
+  itemUrl?: string;
+  author?: string[];
+  publisher?: string;
+  publicationDate?: string;
+  /** The retrieved excerpts themselves. */
+  snippets: string[];
+}
+
+export interface GlooGroundedCompletionOptions extends GlooCompletionOptions {
+  /**
+   * Publisher NAME (case-sensitive) whose corpus grounds the call — note this
+   * is the display name, not the publisher UUID used for ingestion. Defaults
+   * to GLOO_RAG_PUBLISHER.
+   */
+  ragPublisher?: string;
+  /** Sources to retrieve, 1–10. Gloo's own default is 3. */
+  sourcesLimit?: number;
+}
+
+export interface GlooGroundedCompletion extends GlooCompletion {
+  /** False when retrieval found nothing relevant — the "no grounding" signal. */
+  sourcesReturned: boolean;
+  /** Populated because the client always sends include_citations: true. */
+  citations: GlooCitation[];
 }
 
 interface CachedToken {
@@ -149,10 +190,22 @@ function isTransient(error: unknown): boolean {
   return error instanceof TypeError;
 }
 
-async function requestCompletion(
-  options: GlooCompletionOptions,
-): Promise<GlooCompletion> {
-  const accessToken = await getAccessToken();
+/**
+ * The request body shared by both endpoints. Exactly one routing choice may be
+ * sent (auto_routing / model / model_family), hence the either/or below.
+ */
+function completionBody(options: GlooCompletionOptions): Record<string, unknown> {
+  // Verified on both endpoints: Gloo rejects tradition "not_faith_specific"
+  // unless an explicit model is named — "Model is required when tradition is
+  // set to not_faith_specific" (422). Every other tradition works with
+  // auto-routing. Caught here so the contradiction fails locally, with the
+  // reason, instead of as an opaque upstream validation error.
+  if (options.tradition === "not_faith_specific" && !options.model) {
+    throw new Error(
+      'Gloo requires an explicit model when tradition is "not_faith_specific" — ' +
+        "pass a model, choose another tradition, or omit tradition entirely",
+    );
+  }
 
   const body: Record<string, unknown> = {
     messages: options.messages,
@@ -165,8 +218,32 @@ async function requestCompletion(
   } else {
     body.auto_routing = true;
   }
+  return body;
+}
 
-  const response = await fetch(COMPLETIONS_URL, {
+/** The response fields both endpoints share; grounded adds two more. */
+interface GlooCompletionResponse {
+  model: string;
+  choices?: Array<{ message?: { role?: string; content?: string } }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  sources_returned?: boolean;
+  citations?: Array<{
+    item_title?: string;
+    item_url?: string;
+    author?: string[];
+    publisher?: string;
+    publication_date?: string;
+    snippets?: string[];
+  }>;
+}
+
+async function postCompletion(
+  url: string,
+  body: Record<string, unknown>,
+): Promise<{ raw: GlooCompletionResponse; content: string }> {
+  const accessToken = await getAccessToken();
+
+  const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -187,11 +264,7 @@ async function requestCompletion(
     );
   }
 
-  const completion = (await response.json()) as {
-    model: string;
-    choices: Array<{ message: { role: string; content: string } }>;
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
-  };
+  const completion = (await response.json()) as GlooCompletionResponse;
 
   const content = completion.choices?.[0]?.message?.content;
   if (!content) {
@@ -207,11 +280,67 @@ async function requestCompletion(
     throw new GlooGuardrailError(content);
   }
 
+  return { raw: completion, content };
+}
+
+async function requestCompletion(
+  options: GlooCompletionOptions,
+): Promise<GlooCompletion> {
+  const { raw, content } = await postCompletion(
+    COMPLETIONS_URL,
+    completionBody(options),
+  );
   return {
     content,
-    model: completion.model,
-    promptTokens: completion.usage?.prompt_tokens,
-    completionTokens: completion.usage?.completion_tokens,
+    model: raw.model,
+    promptTokens: raw.usage?.prompt_tokens,
+    completionTokens: raw.usage?.completion_tokens,
+  };
+}
+
+async function requestGroundedCompletion(
+  options: GlooGroundedCompletionOptions,
+): Promise<GlooGroundedCompletion> {
+  const ragPublisher = options.ragPublisher ?? process.env.GLOO_RAG_PUBLISHER;
+  if (!ragPublisher) {
+    throw new Error(
+      "GLOO_RAG_PUBLISHER is not set and no ragPublisher was passed — see .env.example",
+    );
+  }
+  if (
+    options.sourcesLimit !== undefined &&
+    (!Number.isInteger(options.sourcesLimit) ||
+      options.sourcesLimit < 1 ||
+      options.sourcesLimit > 10)
+  ) {
+    throw new Error(
+      `sourcesLimit must be an integer between 1 and 10, got ${options.sourcesLimit}`,
+    );
+  }
+
+  const { raw, content } = await postCompletion(GROUNDED_COMPLETIONS_URL, {
+    ...completionBody(options),
+    rag_publisher: ragPublisher,
+    sources_limit: options.sourcesLimit,
+    // Gloo defaults this to false, which would drop the citations the Context
+    // Agent needs both for its scope guard and for source attribution.
+    include_citations: true,
+  });
+
+  return {
+    content,
+    model: raw.model,
+    promptTokens: raw.usage?.prompt_tokens,
+    completionTokens: raw.usage?.completion_tokens,
+    sourcesReturned: raw.sources_returned === true,
+    citations: (raw.citations ?? []).map((citation) => ({
+      itemTitle: citation.item_title ?? "",
+      itemUrl: citation.item_url,
+      author: citation.author,
+      publisher: citation.publisher,
+      publicationDate: citation.publication_date,
+      snippets: citation.snippets ?? [],
+    })),
   };
 }
 
@@ -226,19 +355,21 @@ async function writeAgentLog(row: typeof agentLogs.$inferInsert): Promise<void> 
 }
 
 /**
- * Run a Completions V2 call through Gloo with retry on transient errors
- * (429, 5xx, network) and write an agent_logs row for the call — one row per
- * logical call, recording the final outcome, not one per retry attempt.
+ * Retry a Gloo completion call on transient errors (429, 5xx, network) and
+ * write an agent_logs row for it — one row per logical call, recording the
+ * final outcome, not one per retry attempt. Shared by the plain and the
+ * grounded endpoints so both are logged identically.
  */
-export async function chatCompletion(
+async function completionWithRetryAndLog<T extends GlooCompletion>(
   options: GlooCompletionOptions,
-): Promise<GlooCompletion> {
+  request: () => Promise<T>,
+): Promise<T> {
   const startedAt = Date.now();
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const completion = await requestCompletion(options);
+      const completion = await request();
       await writeAgentLog({
         agentName: options.agentName,
         model: completion.model,
@@ -275,15 +406,35 @@ export async function chatCompletion(
   throw lastError;
 }
 
+/** Run a Completions V2 call through Gloo, logged and retried. */
+export async function chatCompletion(
+  options: GlooCompletionOptions,
+): Promise<GlooCompletion> {
+  return completionWithRetryAndLog(options, () => requestCompletion(options));
+}
+
 /**
- * Grounded Completions (RAG over the Psalms commentary corpus) — placeholder
- * until Step 32 uploads the corpus and completes this method. Kept here so
- * the Context agent stub (Step 5) already binds to its permanent home.
+ * Grounded Completions — retrieval and generation in ONE call against the
+ * publisher-scoped corpus, logged and retried exactly like chatCompletion.
+ *
+ * Retrieval is scoped only by publisher: there is no metadata filter and no
+ * relevance score. Callers must therefore treat `sourcesReturned` as the
+ * "did retrieval find anything" gate and check `citations[].itemTitle` against
+ * the passage they asked about before trusting the grounding.
+ *
+ * Two failure modes worth telling apart (both verified against the live API):
+ * a publisher name that Gloo does not recognise is a hard 403
+ * ("Forbidden - insufficient permissions"), NOT an ungrounded answer — so a
+ * misconfigured GLOO_RAG_PUBLISHER surfaces as GlooApiError, never as silently
+ * missing grounding. Omitting rag_publisher entirely, by contrast, returns a
+ * perfectly ordinary 200 with no sources at all, which is precisely why this
+ * client refuses to send the call without one.
  */
-export async function groundedCompletion(): Promise<never> {
-  throw new GlooApiError(
-    "Grounded Completions is not implemented until Step 32 (RAG corpus upload)",
-    501,
+export async function groundedCompletion(
+  options: GlooGroundedCompletionOptions,
+): Promise<GlooGroundedCompletion> {
+  return completionWithRetryAndLog(options, () =>
+    requestGroundedCompletion(options),
   );
 }
 

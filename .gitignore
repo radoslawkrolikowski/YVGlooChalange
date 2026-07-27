@@ -26,6 +26,14 @@ skills-lock.json
 *.tsbuildinfo
 next-env.d.ts
 
+# RAG corpus source PDF (Step 32) — the split Markdown in corpus/psalms/ is
+# committed as the ingestion input of record; the multi-MB binary it came from
+# is not.
+/corpus/source/
+
 # misc
 .DS_Store
 npm-debug.log*
+
+# Corpus
+/corpus/source/
