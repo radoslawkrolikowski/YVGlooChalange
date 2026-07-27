@@ -42,6 +42,9 @@ export async function GET(request: Request) {
         ? `${reference} commentary. ${question}`
         : `${reference} commentary`,
     });
+    // Unbudgeted first, so the response can separate the two reasons a chunk
+    // did not make it into the prompt: wrong item, or simply beyond the budget.
+    const onTarget = chunksForPassage(hits, reference);
     const scoped = chunksForPassage(hits, reference, CHUNK_BUDGET);
 
     const commentary = scoped.map((chunk) => chunk.snippet).join("\n\n");
@@ -77,8 +80,13 @@ export async function GET(request: Request) {
       corpusFile,
       covered: scoped.length > 0,
       retrieved: hits.length,
+      /** Chunks from this passage's own file — the recall the query achieved. */
+      onTarget: onTarget.length,
+      /** Dropped because they belong to some other Psalm. */
+      droppedFromOtherItems: hits.length - onTarget.length,
+      /** On-target chunks left out by CHUNK_BUDGET, not by the filter. */
+      droppedByBudget: onTarget.length - scoped.length,
       kept: scoped.length,
-      droppedFromOtherItems: hits.length - scoped.length,
       keptChars: commentary.length,
       // Proof of scoping: every title here must name the requested passage.
       keptTitles: [...new Set(scoped.map((chunk) => chunk.itemTitle))],
