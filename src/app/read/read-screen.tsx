@@ -20,6 +20,7 @@ import {
 } from "@/components/ui";
 import { MAX_SESSION_HIGHLIGHT_LENGTH } from "@/config/highlights";
 import type { PlanDay } from "@/lib/plans";
+import { AskCard } from "./ask-card";
 import { HighlightablePassage } from "./highlightable-passage";
 import { NoteCard } from "./note-card";
 import { PreReadingCard } from "./pre-reading-card";
@@ -336,6 +337,12 @@ export function ReadScreen({
             {result.attribution && (
               <VersionAttribution text={result.attribution} />
             )}
+
+            {/* Ask the commentary corpus about this passage (Step 33A).
+                Collapsed by default so Scripture keeps the screen; the day's
+                human label is what the corpus maps on, never the USFM
+                reference. */}
+            <AskCard label={day.label} isAnonymous={isAnonymous} />
 
             {/* Private per-passage note (Step 19A) — a quiet scratch surface
                 beside highlights, keyed on the reference so a version switch
