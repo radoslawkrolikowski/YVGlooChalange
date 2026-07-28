@@ -389,6 +389,27 @@ async function writeAgentLog(row: typeof agentLogs.$inferInsert): Promise<void> 
 }
 
 /**
+ * Record a non-model event on the same audit trail as the calls around it —
+ * e.g. how many retrieved chunks survived a corpus filter (Step 33A), which is
+ * the only place that count exists once filtering is client-side.
+ *
+ * Deliberately narrow: it carries a note, never content, and cannot fail a
+ * request (writeAgentLog swallows its own errors). It is not a way around
+ * chatCompletion() — every actual model call still goes through the client.
+ */
+export async function logAgentNote(
+  agentName: string,
+  note: string,
+): Promise<void> {
+  await writeAgentLog({
+    agentName,
+    model: null,
+    status: "ok",
+    outputPreview: note.slice(0, OUTPUT_PREVIEW_CHARS),
+  });
+}
+
+/**
  * Retry a Gloo completion call on transient errors (429, 5xx, network) and
  * write an agent_logs row for it — one row per logical call, recording the
  * final outcome, not one per retry attempt. Shared by the plain and the
