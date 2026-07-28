@@ -50,9 +50,13 @@ export default async function CircleThreadPage({
 
   // Render in the reader's own language: attach their cached translations
   // (Step 27). A reader without a set language sees every message in original.
+  // The viewer is passed too (Step 35A): a shared prayer-request card needs to
+  // know whether THIS reader is its author (they get "Mark as answered") and
+  // whether they have already prayed — never anything about anyone else.
   const initialMessages = await loadThreadMessages(
     circleId,
     session.user.language,
+    { kind: "user", userId: session.user.id },
   );
 
   // Resolve the reflection day only for a well-formed, real plan day.

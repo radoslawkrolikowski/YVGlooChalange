@@ -10,6 +10,7 @@ import {
   loadThreadMessages,
 } from "@/lib/circles";
 import { resolveSession, type Session } from "@/lib/session";
+import { sessionOwner } from "@/lib/session-owner";
 import { ensureReaderTranslations, translateNewMessage } from "@/lib/translation";
 
 export const dynamic = "force-dynamic";
@@ -112,7 +113,7 @@ export async function GET(
   // server-rendered page instead, but it is harmless to include here.
   const [circle, messageList, reflectionDay] = await Promise.all([
     loadThreadCircle(circleId),
-    loadThreadMessages(circleId, session.language),
+    loadThreadMessages(circleId, session.language, sessionOwner(session)),
     loadCircleCurrentDay(circleId),
   ]);
 
@@ -188,6 +189,10 @@ export async function POST(
 
   // Return the fresh thread so the poster sees their message immediately,
   // without waiting for the next poll interval — in the poster's own language.
-  const messageList = await loadThreadMessages(circleId, session.language);
+  const messageList = await loadThreadMessages(
+    circleId,
+    session.language,
+    sessionOwner(session),
+  );
   return NextResponse.json({ ok: true, id: inserted.id, messages: messageList });
 }

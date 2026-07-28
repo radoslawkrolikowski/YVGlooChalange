@@ -9,6 +9,7 @@ import {
 import { submitReflection } from "@/lib/reflections";
 import { GlooApiError } from "@/lib/gloo";
 import { resolveSession, type Session } from "@/lib/session";
+import { sessionOwner } from "@/lib/session-owner";
 import { translateNewMessage } from "@/lib/translation";
 
 export const dynamic = "force-dynamic";
@@ -176,7 +177,11 @@ export async function POST(
 
     // Unflagged: return the fresh thread so the poster sees their reflection
     // immediately, without waiting for the next poll interval — in their language.
-    const messageList = await loadThreadMessages(circleId, session.language);
+    const messageList = await loadThreadMessages(
+      circleId,
+      session.language,
+      sessionOwner(session),
+    );
     return NextResponse.json({
       ok: true,
       flagged: false,
