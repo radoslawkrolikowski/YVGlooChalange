@@ -1,0 +1,1 @@
+ALTER TABLE "digests" ADD COLUMN "source_attribution" text;

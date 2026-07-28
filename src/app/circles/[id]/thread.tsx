@@ -755,6 +755,15 @@ function DigestRow({ message }: { message: ThreadMessage }) {
         </blockquote>
 
         {digest.summary && <LessonSummary summary={digest.summary} />}
+
+        {/* Step 33: present only when the Context agent found commentary for
+            this passage in the corpus. Deliberately the quietest thing in the
+            card — it credits a source, it does not compete with the digest. */}
+        {digest.sourceAttribution && (
+          <p className="text-[0.7rem] leading-relaxed text-ink-faint">
+            {digest.sourceAttribution}
+          </p>
+        )}
       </div>
     </SystemMessage>
   );

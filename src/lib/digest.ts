@@ -45,6 +45,7 @@
 // Instant Access sessions never reach this module.
 
 import { and, asc, desc, eq } from "drizzle-orm";
+import { retrieveCommentaryContext } from "@/agents/context";
 import { generateDigest } from "@/agents/facilitator";
 import { generateSummary } from "@/agents/summary";
 import { effectiveVersionId } from "@/config/bible-versions";
@@ -258,10 +259,22 @@ export async function runCircleDigest(circleId: string): Promise<DigestOutcome> 
     );
 
     const passageText = passage.content.slice(0, MAX_PASSAGE_CHARS);
+
+    // Step 33 — the Context agent runs BEFORE the Facilitator (brief §6) and
+    // hands it modernised commentary as extra grounding. It is keyed on the
+    // day's HUMAN label, never the USFM reference, and never sees the
+    // reflections. When the corpus does not cover the passage it returns its
+    // no-op and everything below runs exactly as it did before Step 33.
+    const commentary = await retrieveCommentaryContext({
+      passageLabel: planDay.label,
+      language: facts.language,
+    });
+
     const { digest, model } = await generateDigest({
       passageReference: planDay.reference,
       passageText,
       reflections: dayReflections.entries,
+      contextGrounding: commentary.grounding ?? undefined,
       language: facts.language,
     });
 
@@ -322,6 +335,7 @@ export async function runCircleDigest(circleId: string): Promise<DigestOutcome> 
         overlapTheme,
         question: digest.question,
         summary,
+        sourceAttribution: commentary.sourceAttribution,
         model,
         messageId: message.id,
       })
@@ -339,6 +353,7 @@ export async function runCircleDigest(circleId: string): Promise<DigestOutcome> 
       passageReference: planDay.reference,
       passageText,
       reflections: dayReflections.entries,
+      contextGrounding: commentary.grounding,
       overlapMembers,
       baseOverlapTheme: overlapTheme,
     });
@@ -369,6 +384,11 @@ interface DigestVariantsInput {
   passageReference: string;
   passageText: string;
   reflections: { authorDisplayName: string; text: string }[];
+  /** The Context agent's commentary grounding (Step 33), null when uncovered.
+   * Reused across languages rather than re-restated per language: it is prompt
+   * INPUT, and the Facilitator writes its output in the reader's language
+   * regardless of the language its grounding arrived in. */
+  contextGrounding: string | null;
   /** Validated overlap member names, reused for every language (chips). */
   overlapMembers: string[];
   /** The base-language theme phrase, used as a fallback if a variant omits one. */
@@ -394,6 +414,7 @@ async function generateDigestVariants(input: DigestVariantsInput): Promise<void>
         passageReference: input.passageReference,
         passageText: input.passageText,
         reflections: input.reflections,
+        contextGrounding: input.contextGrounding ?? undefined,
         language,
       });
       // Reuse the base overlap decision; only the theme phrase is taken in the

@@ -60,6 +60,8 @@ const SYSTEM_PROMPT =
   "Use the exact member names given to you, never invented ones; " +
   "(3) question — one open discussion question grounded in the specific passage AND the circle's own words, inviting replies. " +
   "Never compare members, never rank them, never mention who did or did not reflect, never quiz on facts. " +
+  "You are sometimes given commentary grounding — background on the passage from a Bible commentary. " +
+  "Use it to make the synthesis and question more accurate and concrete about the passage; never quote it, never cite it, and never let it displace what the members actually said. " +
   "Write every part directly in the requested language. " +
   "Respond with JSON only — no prose, no markdown fences.";
 
@@ -76,7 +78,11 @@ function buildUserMessage(input: FacilitatorInput): string {
   ];
 
   if (input.contextGrounding) {
-    lines.push("Commentary grounding:", input.contextGrounding, "");
+    lines.push(
+      "Commentary grounding (background on this passage — inform the digest with it, do not quote it):",
+      input.contextGrounding,
+      "",
+    );
   }
 
   lines.push(
