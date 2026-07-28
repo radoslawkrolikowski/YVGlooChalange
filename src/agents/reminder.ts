@@ -78,7 +78,7 @@ export async function generateReminder(
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: buildUserMessage(input) },
     ],
-    maxTokens: 250,
+    maxTokens: 700,
   });
   return { text: asText(completion.content), model: completion.model };
 }

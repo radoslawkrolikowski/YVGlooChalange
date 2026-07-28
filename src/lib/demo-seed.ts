@@ -73,7 +73,7 @@ async function generateHello(botName: string): Promise<string> {
       },
       { role: "user", content: "Introduce yourself and welcome the circle." },
     ],
-    maxTokens: 160,
+    maxTokens: 600,
   });
   return content.trim();
 }
@@ -99,7 +99,7 @@ async function generateReflection(
         content: `Today's passage (${passageLabel}):\n${passageText}\n\nWrite your reflection.`,
       },
     ],
-    maxTokens: 200,
+    maxTokens: 600,
   });
   return content.trim();
 }

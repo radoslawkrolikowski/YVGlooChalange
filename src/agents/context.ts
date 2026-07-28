@@ -111,6 +111,17 @@ function buildSourceAttribution(chunks: GlooSearchChunk[]): string | null {
   return `Historical context from ${source}, public domain`;
 }
 
+/** Everything up to the last sentence-ending punctuation, or the text unchanged
+ * when it holds no complete sentence at all. */
+function trimToLastSentence(text: string): string {
+  const lastEnd = Math.max(
+    text.lastIndexOf("."),
+    text.lastIndexOf("!"),
+    text.lastIndexOf("?"),
+  );
+  return lastEnd === -1 ? text : text.slice(0, lastEnd + 1);
+}
+
 function cacheGet(key: string): ContextRetrieval | null {
   const entry = cache.get(key);
   if (!entry) return null;
@@ -185,10 +196,19 @@ export async function retrieveCommentaryContext(
           ].join("\n"),
         },
       ],
-      maxTokens: 400,
+      // Sized for reasoning models: Gloo routes some calls to models whose
+      // thinking tokens come out of this same budget, so a budget measuring
+      // only the prose returns a fragment (see src/agents/summary.ts).
+      maxTokens: 900,
     });
 
-    const grounding = completion.content.trim();
+    // A cut-off restatement is still usable grounding — it is prompt input, not
+    // user-facing prose — but it must not end mid-sentence, or the Facilitator
+    // is handed a dangling clause. Trim back to the last complete sentence and
+    // spend no second call: this is optional grounding, not the digest itself.
+    const grounding = completion.truncated
+      ? trimToLastSentence(completion.content.trim())
+      : completion.content.trim();
     if (!grounding) return noCoverage(chunks[0]?.filename ?? null);
 
     const result: ContextRetrieval = {

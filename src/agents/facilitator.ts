@@ -153,10 +153,19 @@ function asDigest(raw: unknown): FacilitatorOutput {
 }
 
 /**
- * Run the Gloo call and shape its output. One re-ask on malformed JSON (the
- * parse failure fed back); transient HTTP errors are already retried inside the
- * Gloo client. Throws when both attempts fail — the caller then posts nothing,
- * so a bad generation is invisible rather than ugly.
+ * Token budget for one digest. Sized well above the JSON's own length because
+ * Gloo routes to reasoning models whose thinking tokens are spent from this
+ * same budget — too small a budget returns JSON cut mid-string, which fails the
+ * parse below and costs a whole second call to discover.
+ */
+const MAX_TOKENS = 900;
+
+/**
+ * Run the Gloo call and shape its output. One re-ask on malformed JSON or on an
+ * answer cut off by the token budget (the failure fed back, and the retry given
+ * a doubled budget); transient HTTP errors are already retried inside the Gloo
+ * client. Throws when both attempts fail — the caller then posts nothing, so a
+ * bad generation is invisible rather than ugly.
  */
 export async function generateDigest(
   input: FacilitatorInput,
@@ -176,8 +185,12 @@ export async function generateDigest(
               : ""),
         },
       ],
-      maxTokens: 500,
+      maxTokens: MAX_TOKENS * attempt,
     });
+    if (completion.truncated) {
+      lastError = "the answer was cut off before the JSON was complete";
+      continue;
+    }
     try {
       return {
         digest: asDigest(parseJson(completion.content)),

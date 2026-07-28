@@ -82,7 +82,7 @@ export async function translateText(
       { role: "system", content: TRANSLATE_SYSTEM_PROMPT },
       { role: "user", content: buildTranslateMessage(input) },
     ],
-    maxTokens: 500,
+    maxTokens: 1200,
   });
   const text = clean(completion.content);
   if (text.length === 0) {
@@ -105,7 +105,13 @@ export async function detectLanguage(text: string): Promise<string | null> {
       { role: "system", content: DETECT_SYSTEM_PROMPT },
       { role: "user", content: text.slice(0, 500) },
     ],
-    maxTokens: 8,
+    // Room for a reasoning model's thinking tokens, which come out of this
+    // budget — at 8 such a model spent the lot on thinking and returned an
+    // empty answer, silently demoting every detection to the profile-language
+    // fallback. The answer itself is still one code: `slice(0, 2)` below is the
+    // real bound, and a budget stop here is expected rather than a defect.
+    maxTokens: 200,
+    allowTruncated: true,
   });
   const code = clean(completion.content).toLowerCase().slice(0, 2);
   return /^[a-z]{2}$/.test(code) ? code : null;

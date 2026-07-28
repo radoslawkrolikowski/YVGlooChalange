@@ -119,7 +119,7 @@ export async function generateCircleBotReply(
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: buildUserMessage(input) },
     ],
-    maxTokens: 180,
+    maxTokens: 600,
   });
   const reply = cleanReply(completion.content);
   if (reply.length === 0) {

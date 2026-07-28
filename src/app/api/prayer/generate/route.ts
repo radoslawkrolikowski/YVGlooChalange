@@ -120,7 +120,10 @@ export async function POST(request: Request) {
         for await (const chunk of chatCompletionStream({
           agentName: "prayer",
           messages: buildPrayerMessages(input),
-          maxTokens: 500,
+          // Headroom for a reasoning model's thinking tokens, which are spent
+          // from this same budget (see chatCompletion's truncation retry — the
+          // streaming path cannot re-ask, so it must not run the budget close).
+          maxTokens: 1200,
         })) {
           full += chunk.delta;
           send({ delta: chunk.delta });

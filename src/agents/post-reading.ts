@@ -145,7 +145,7 @@ export async function generateConversationStarters(
               : ""),
         },
       ],
-      maxTokens: 400,
+      maxTokens: 900,
     });
     try {
       return {

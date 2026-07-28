@@ -129,7 +129,7 @@ export async function generateCompanionTurn(
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: buildUserMessage(input) },
     ],
-    maxTokens: 200,
+    maxTokens: 600,
   });
   const turn = cleanTurn(completion.content);
   if (turn.length === 0) {
