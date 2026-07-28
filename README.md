@@ -7,7 +7,7 @@ top of reading, the same relationship Strava has to running.
 
 | | |
 |---|---|
-| **Live demo** | _<!-- TODO: production Vercel URL -->_ — no account needed, tap **Instant Access** |
+| **Live demo** | **https://yv-gloo-chalange.vercel.app** — no account needed, tap **Instant Access** |
 | **Video** | _<!-- TODO: public YouTube link -->_ |
 | **Competition** | Scripture in New Frontiers — Gloo AI + YouVersion on Kaggle, July 2026 |
 
@@ -23,9 +23,11 @@ anywhere in the codebase.
 No sign-up required — Instant Access is a full product experience, not a tour of
 screenshots. Every AI call is live and every passage is fetched live.
 
-1. Open the demo link and tap **Instant Access**.
-2. Pick a language and Bible version (try **Spanish / NVI** — the passage arrives
-   in Spanish from YouVersion, never translated into it).
+1. Open [the demo](https://yv-gloo-chalange.vercel.app) and tap **Instant Access**.
+2. Pick a language and Bible version (try **Spanish / RVES** — the passage arrives
+   in Spanish from YouVersion, never translated into it). See
+   [Bible version licensing](#bible-version-licensing) for why some versions in
+   the picker are greyed out.
 3. Open today's reading. **Pre-reading prompts** are generated for you before the
    text.
 4. Read, highlight a phrase, then finish. **Conversation starters** are generated
@@ -83,8 +85,8 @@ All Scripture goes through [src/lib/youversion.ts](src/lib/youversion.ts). No
 translation is embedded, hardcoded, or cached as text in this repository, and
 Bible text is **never** passed to Gloo for translation. Language is carried by
 the YouVersion **version ID**, which encodes both language and translation — so
-a Spanish reader gets NVI directly from YouVersion, not English NIV translated
-after the fact.
+a Spanish reader gets a Spanish translation directly from YouVersion, not English
+translated after the fact.
 
 | YouVersion capability | Function | Used for |
 |---|---|---|
@@ -100,6 +102,28 @@ after the fact.
 The Translation Agent has a matching guard from the other side: it only ever
 receives user-generated circle content, never Scripture — see the module header
 in [src/agents/translation.ts](src/agents/translation.ts).
+
+### Bible version licensing
+
+A YouVersion app key can only *fetch* translations whose licence has been granted
+to it in the platform dashboard. Round's curated catalogue lists the translations
+the brief asks for, each carrying the licence state verified live against the API
+— [src/config/bible-versions.ts](src/config/bible-versions.ts).
+
+On the deployment linked above, one version per language is licensed today:
+
+| Language | Selectable now | In the picker, disabled pending licence |
+|---|---|---|
+| English | **BSB** | NIV, KJV, NASB2020, AMP |
+| Spanish | **RVES** | NVI, LBLA |
+| Portuguese | **BLT** | NVI-PT |
+
+Unlicensed versions are shown but disabled rather than hidden, and
+`effectiveVersionId()` resolves any request to a version that will actually
+fetch: an explicitly chosen version wins while it stays licensed, otherwise the
+language default, otherwise the licensed fallback for that language. So a reader
+always gets Scripture in their own language, and granting a licence later is a
+one-flag change with no code path to rewrite.
 
 ---
 
