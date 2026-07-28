@@ -14,18 +14,18 @@ comparing rather than blending.
 |---|---|---|
 | **Protagonist** | One woman, interior, alone | Four people, a circle, intercut |
 | **Emotional engine** | Being *understood* in your own language | Being *welcomed back* after you disappear |
-| **The enemy** | Isolation | Shame |
+| **The enemy** | Isolation | Being seen falling behind |
 | **Narration** | Spanish voiceover monologue | The circle thread itself — messages on screen |
 | **Tone** | Melancholy → warmth, slow | Wry, warm, faster cutting, one laugh |
 | **Entry path shown** | Instant Access, anonymous | Sign in with YouVersion, highlight import |
-| **Features shown** | Pre-reading prompts, RVES passage, Escalation card, translation, digest overlap | Icebreaker, AI matching, Reminder, Companion, shared prayer, *the absence of streaks* |
-| **Peak moment** | "Marisol and Tom both stopped at the same line." | A man opens an app after nine days and nothing punishes him. |
+| **Features shown** | Pre-reading prompts, RVES passage, Escalation card, translation, digest overlap | Icebreaker, AI matching, Reminder, Companion, shared prayer, *the absence of member-vs-member ranking* |
+| **Peak moment** | "Marisol and Tom both stopped at the same line." | A man nine days behind opens the app, and nobody in his circle can see it. |
 | **Risk** | Slow open; may lose a judge in the first 20s | Ensemble means less depth per character |
 
 **Feature coverage is almost non-overlapping.** If you shoot both, you cover
 nearly the whole product. If you shoot one, V1 is the more distinctive film and
-V2 is the more *persuasive* one — it argues against the thing everyone already
-hates about habit apps.
+V2 is the more *persuasive* one — it names the specific reason people quit small
+groups, which is not laziness but not wanting to be the one who fell behind.
 
 ---
 
@@ -35,17 +35,28 @@ hates about habit apps.
 so and must not be cut. Every screen is the real product at
 https://yv-gloo-chalange.vercel.app — shoot the live app, mock nothing up.
 
-**The design constraint is the story.** Round has no leaderboard, no streak
-counter, no per-member progress bar, no days-read count. That is a documented
-product rule, not a missing feature — and this film is 2:40 of argument for why.
-Do not show a streak even ironically.
+**The design constraint is the story — and it is narrower than "no streaks."**
+The brief's rule is *"No pace or streak comparison between members. Never show a
+leaderboard, per-member progress bar visible to others, or days-read count next
+to names."* That is about **social comparison**, not about personal habit
+tracking.
+
+This distinction is not pedantry. **Round is built on the YouVersion Platform
+API, sits on top of the YouVersion Bible App, and deep-links into it from every
+passage.** The Bible App has streaks. A film whose argument is "streaks shame
+you" attacks the platform this product depends on and the organisation
+co-hosting the competition it is being submitted to.
+
+So the villain of this film is **being ranked against the four people in your
+circle** — not the idea of tracking your own reading. David is not afraid of a
+number. He is afraid of *the others seeing it*. Direct every beat to that.
 
 ---
 
 ## The story in one line
 
-A man falls nine days behind, dreads opening the app, opens it — and nothing
-punishes him.
+A man falls nine days behind, dreads what the other three will see, opens the
+app — and finds they were never able to see it at all.
 
 ---
 
@@ -105,8 +116,8 @@ punishes him.
 | | |
 |---|---|
 | **VISUAL** | Night. His car in a hospital car park, engine off. He holds the phone. Thumb hovers over the Round icon. Doesn't tap. Close on his face — this is the real emotion of the film, and it is not sadness. It is **embarrassment**. |
-| **VO (David)** | I knew exactly what was waiting. <br><br> A little red number. A broken streak. Some cartoon being disappointed in me. |
-| **VO (cont., quieter)** | That's why I didn't open it for nine days. Not because I was busy. |
+| **VO (David)** | It wasn't the reading I was avoiding. <br><br> It was the three of them seeing how far back I was. |
+| **VO (cont., quieter)** | Nine days behind, with my name on it. That's why I didn't open it. Not because I was busy. |
 | **SOUND** | Everything drops to the hum. |
 
 > **Direction:** Hold the hover for a full 3 seconds. Uncomfortably long. The
@@ -114,20 +125,21 @@ punishes him.
 
 ---
 
-### 1:36 – 2:00 — Nothing punishes him
+### 1:36 – 2:00 — Nobody could see
 
 | | |
 |---|---|
-| **VISUAL** | He taps. The app opens. **Camera holds wide on the screen and does not cut for four full seconds.** No streak counter. No red badge. No progress bar. No "you missed 9 days." |
+| **VISUAL** | He taps. The app opens. **Camera holds wide on the screen and does not cut for four full seconds.** Four names in the circle, and not one number beside any of them. No ranking. No "3 of 4 members are ahead of you." Nothing that tells the others where he is. |
 | **VISUAL (cont.)** | One notification, in plain language: a short note about the passage he missed and what the circle has been talking about. Then the thread — and a message from Round that picks up something Grace said, still open, still going. |
 | **VISUAL (cont.)** | Then Grace's message, sent six days earlier: *"Leaving this here for whenever you're back, David. No rush."* |
 | **VO (David)** | Nothing. <br><br> Nobody had counted. |
 | **SOUND** | Hum cuts out. Single warm chord. |
 
 > **Product truth:** the Reminder Agent writes a personalised nudge referencing
-> the missed passage and what the circle discussed — never a streak, never a
-> comparison. The Companion Agent keeps a quiet thread alive. No pace or streak
-> comparison between members is a hard design constraint.
+> the missed passage and what the circle discussed — addressed to him, about the
+> reading, never about how he compares to anyone. The Companion Agent keeps a
+> quiet thread alive. No pace or streak comparison *between members* is a hard
+> design constraint.
 
 ---
 
@@ -176,16 +188,24 @@ chord and stays.
 fragmented and mechanised during the montage; reassembled in full at 2:00. No
 lyrics.
 
-**What NOT to show.** No streak counters, no leaderboards, no progress bars, no
-"Day 47 🔥", no confetti. Not even in the montage, not even as a joke about
-another app. The film's argument dies if the audience sees one.
+**What NOT to show.** No leaderboard, no member-vs-member progress bar, no
+days-read count beside anyone's name, no "3 of 4 members are ahead of you." The
+film's argument dies if the audience sees one.
+
+**And do not mock habit tracking.** No burning-flame icon, no cartoon mascot
+looking disappointed, no parody of another app's streak screen — not even for a
+laugh in the montage. Round runs on the YouVersion Platform API and deep-links
+into the YouVersion Bible App from every passage; the Bible App has streaks.
+Punching at that is punching at the platform, the co-host of the competition,
+and a feature that genuinely helps a lot of people. The film's target is
+**visibility to others**, never self-tracking.
 
 ---
 
 ## 60-second cutdown
 
-Keep: 0:18–0:38 (blank thread), 1:20–1:36 (the dread), 1:36–2:00 (nothing
-punishes him), end card. Drop the four-room open, the nine-day montage, and the
+Keep: 0:18–0:38 (blank thread), 1:20–1:36 (the dread), 1:36–2:00 (nobody could
+see), end card. Drop the four-room open, the nine-day montage, and the
 ensemble payoff.
 
 The cutdown is arguably stronger than the full version — the dread-to-relief
@@ -206,3 +226,12 @@ movement rather than stillness, it argues a point a judge can immediately agree
 with, and its feature coverage skews toward the agent behaviours that are
 hardest to convey in a writeup. V1 is the better *film* and the more memorable
 one, but it asks for 22 seconds of patience before it gives anything back.
+
+**One caution specific to V2.** Its argument runs adjacent to a feature the
+YouVersion Bible App is known for, and YouVersion co-hosts this competition.
+Directed as written — the villain is the *circle* seeing David's position, never
+habit tracking itself — it reads as Round knowing what belongs at which layer:
+the Bible App handles your reading, Round handles the room you read in. Directed
+carelessly, with one flame icon or one disappointed mascot, it reads as a shot
+at the host. If in doubt on the day, cut toward "nobody could see" and away from
+"no numbers."
