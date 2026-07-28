@@ -38,6 +38,31 @@ const SOURCE_TITLE = "Treasury of David";
 const ATTRIBUTION =
   "From *The Treasury of David* (Abridged) by Charles Spurgeon — public domain.";
 
+/**
+ * Provenance of the redistributed text, written to the head of manifest.json.
+ *
+ * This repository is public and the split Markdown is committed, so the corpus
+ * carries its own chain of title rather than relying on the (gitignored) PDF.
+ * `editionNotice` is the source document's own closing statement, quoted
+ * verbatim from the last page — it is the only licence statement the PDF
+ * carries, and it is what distinguishes the underlying work (out of copyright)
+ * from this particular abridgement (compiled by a third party).
+ */
+const PROVENANCE = {
+  work: "The Treasury of David",
+  author: "Charles Spurgeon (1834–1892)",
+  originalPublication: "1869–1885",
+  underlyingWorkStatus:
+    "Public domain. Spurgeon died in 1892 and the work was published 1869–1885, so the commentary itself is out of copyright worldwide.",
+  edition: "The Treasury of David (Abridged)",
+  editionNotice:
+    "Obtained from www.spurgeon.org. Reformatted and abridged by Eternal Life Ministries. Additional Bible-based resources are available at www.spurgeongems.org.",
+  editionNote:
+    "The abridgement and reformatting are the work of Eternal Life Ministries, which distributes it free of charge; redistribution terms for this edition rest with them. The commentary text it contains is Spurgeon's and is public domain.",
+  usage:
+    "Chunked one file per Psalm and ingested into Gloo's Data Engine as grounding for the Context Agent (src/agents/context.ts). Retrieved commentary is restated in plain modern language before it reaches the Facilitator, and the digest UI renders a source attribution line whenever retrieval was used.",
+} as const;
+
 /** A Psalm heading: the number alone on its own line. */
 const HEADING = /^Psalm (\d{1,3})$/;
 /** The licence separator that ends the source document. */
@@ -192,7 +217,12 @@ headings.forEach((heading, index) => {
 writeFileSync(
   join(OUT_DIR, "manifest.json"),
   `${JSON.stringify(
-    { source: SOURCE_TITLE, pdf: basename(pdfPath), items: manifest },
+    {
+      source: SOURCE_TITLE,
+      pdf: basename(pdfPath),
+      provenance: PROVENANCE,
+      items: manifest,
+    },
     null,
     2,
   )}\n`,

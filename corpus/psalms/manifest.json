@@ -1,6 +1,16 @@
 {
   "source": "Treasury of David",
   "pdf": "psalms-commentary.pdf",
+  "provenance": {
+    "work": "The Treasury of David",
+    "author": "Charles Spurgeon (1834–1892)",
+    "originalPublication": "1869–1885",
+    "underlyingWorkStatus": "Public domain. Spurgeon died in 1892 and the work was published 1869–1885, so the commentary itself is out of copyright worldwide.",
+    "edition": "The Treasury of David (Abridged)",
+    "editionNotice": "Obtained from www.spurgeon.org. Reformatted and abridged by Eternal Life Ministries. Additional Bible-based resources are available at www.spurgeongems.org.",
+    "editionNote": "The abridgement and reformatting are the work of Eternal Life Ministries, which distributes it free of charge; redistribution terms for this edition rest with them. The commentary text it contains is Spurgeon's and is public domain.",
+    "usage": "Chunked one file per Psalm and ingested into Gloo's Data Engine as grounding for the Context Agent (src/agents/context.ts). Retrieved commentary is restated in plain modern language before it reaches the Facilitator, and the digest UI renders a source attribution line whenever retrieval was used."
+  },
   "items": [
     {
       "psalm": 1,
