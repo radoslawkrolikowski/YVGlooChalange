@@ -363,6 +363,12 @@ export interface ThreadDigest {
    * collapsed disclosure inside the digest card. Null on older digests written
    * before Step 25 — the card then simply omits the summary section. */
   summary: string | null;
+  /** Source attribution for the commentary that grounded this digest (Step 33),
+   * e.g. "Historical context from Treasury of David, public domain". Null when
+   * the corpus did not cover the passage — the card then shows no footer line.
+   * Language-independent (a proper noun), so it is not part of the per-language
+   * variant and every reader sees the same line. */
+  sourceAttribution: string | null;
 }
 
 /** The circle header the thread screen needs — name, state, membership. */
@@ -477,6 +483,7 @@ export async function loadThreadMessages(
       digestOverlapTheme: digests.overlapTheme,
       digestQuestion: digests.question,
       digestSummary: digests.summary,
+      digestSourceAttribution: digests.sourceAttribution,
       translationBody: messageTranslations.body,
       variantBody: messageVariants.body,
       variantQuestions: messageVariants.questions,
@@ -586,6 +593,7 @@ export async function loadThreadMessages(
               overlapTheme: variant?.overlapTheme ?? row.digestOverlapTheme,
               question: variant?.question ?? row.digestQuestion!,
               summary: variant?.summary ?? row.digestSummary,
+              sourceAttribution: row.digestSourceAttribution,
             }
           : null,
       translation,

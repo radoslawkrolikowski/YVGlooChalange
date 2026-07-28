@@ -94,6 +94,13 @@ export interface GlooCompletionOptions {
    * combined with auto-routing (see completionBody).
    */
   tradition?: "evangelical" | "catholic" | "mainline" | "not_faith_specific";
+  /**
+   * Skip the client's re-ask when the answer stops on the token budget. Only
+   * for calls whose answer is deliberately a few tokens long (language
+   * detection), where hitting `max_tokens` is the expected outcome, not a
+   * defect.
+   */
+  allowTruncated?: boolean;
 }
 
 export interface GlooCompletion {
@@ -103,6 +110,18 @@ export interface GlooCompletion {
   model: string;
   promptTokens?: number;
   completionTokens?: number;
+  /**
+   * True when the model stopped because it hit `max_tokens` (finish_reason
+   * "length") rather than because it finished — the answer is CUT MID-SENTENCE.
+   *
+   * This matters more than it looks: Gloo routes to reasoning models (e.g.
+   * gemini-2.5-flash), and their thinking tokens are billed against the same
+   * max_tokens budget as the visible answer. A budget sized for the prose alone
+   * therefore returns a fragment that is neither empty nor malformed, so an
+   * agent checking only for those would happily store it. Callers whose output
+   * is prose must check this.
+   */
+  truncated: boolean;
 }
 
 /** One retrieved source behind a grounded completion, as Gloo reports it. */
@@ -233,7 +252,11 @@ function completionBody(options: GlooCompletionOptions): Record<string, unknown>
 /** The response fields both endpoints share; grounded adds two more. */
 interface GlooCompletionResponse {
   model: string;
-  choices?: Array<{ message?: { role?: string; content?: string } }>;
+  choices?: Array<{
+    message?: { role?: string; content?: string };
+    /** "stop" | "length" | … — "length" means the max_tokens budget ran out. */
+    finish_reason?: string;
+  }>;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   sources_returned?: boolean;
   citations?: Array<{
@@ -304,6 +327,7 @@ async function requestCompletion(
     model: raw.model,
     promptTokens: raw.usage?.prompt_tokens,
     completionTokens: raw.usage?.completion_tokens,
+    truncated: raw.choices?.[0]?.finish_reason === "length",
   };
 }
 
@@ -341,6 +365,7 @@ async function requestGroundedCompletion(
     model: raw.model,
     promptTokens: raw.usage?.prompt_tokens,
     completionTokens: raw.usage?.completion_tokens,
+    truncated: raw.choices?.[0]?.finish_reason === "length",
     sourcesReturned: raw.sources_returned === true,
     citations: (raw.citations ?? []).map((citation) => ({
       itemTitle: citation.item_title ?? "",
@@ -415,11 +440,43 @@ async function completionWithRetryAndLog<T extends GlooCompletion>(
   throw lastError;
 }
 
-/** Run a Completions V2 call through Gloo, logged and retried. */
+/** How much bigger the budget gets when an answer came back cut off. */
+const TRUNCATION_RETRY_FACTOR = 3;
+
+/**
+ * Run a Completions V2 call through Gloo, logged and retried.
+ *
+ * One extra retry beyond the transient-error ones: if the answer stopped on
+ * `finish_reason: "length"` it is re-asked with a budget three times the size.
+ * The reason is Gloo's auto-routing — the SAME call may be served by a
+ * reasoning model (gemini-2.5-flash) or a plain one (…-flash-lite), and a
+ * reasoning model spends thinking tokens out of the caller's `max_tokens`. A
+ * budget that comfortably fits the prose therefore returns a fragment on some
+ * calls and complete prose on others, with nothing in the response body that a
+ * "was it empty?" check would catch. Measured: at max_tokens 250 the Reminder
+ * agent returned "Ana, when you have a quiet moment" and the Companion agent
+ * returned "It's interesting to".
+ *
+ * Raising the budget is not itself a cost: billing is on tokens produced, and
+ * the prompts constrain length. Callers who legitimately want a tiny answer
+ * (translation's one-word language detection) pass `allowTruncated`.
+ */
 export async function chatCompletion(
   options: GlooCompletionOptions,
 ): Promise<GlooCompletion> {
-  return completionWithRetryAndLog(options, () => requestCompletion(options));
+  const completion = await completionWithRetryAndLog(options, () =>
+    requestCompletion(options),
+  );
+  if (!completion.truncated || options.allowTruncated || !options.maxTokens) {
+    return completion;
+  }
+  const retryOptions: GlooCompletionOptions = {
+    ...options,
+    maxTokens: options.maxTokens * TRUNCATION_RETRY_FACTOR,
+  };
+  return completionWithRetryAndLog(retryOptions, () =>
+    requestCompletion(retryOptions),
+  );
 }
 
 /**

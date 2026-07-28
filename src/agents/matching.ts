@@ -211,7 +211,7 @@ export async function matchCircle(
               : ""),
         },
       ],
-      maxTokens: 400,
+      maxTokens: 900,
     });
     try {
       return {

@@ -120,7 +120,7 @@ export async function classifyReflection(
       ],
       // Deterministic classification — no creativity wanted on a safety gate.
       temperature: 0,
-      maxTokens: 120,
+      maxTokens: 500,
     });
     try {
       return { verdict: asVerdict(parseJson(completion.content)), model: completion.model };

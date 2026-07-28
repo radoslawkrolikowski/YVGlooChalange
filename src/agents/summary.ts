@@ -73,11 +73,21 @@ function asText(value: unknown): string | null {
 }
 
 /**
- * Run the Gloo call and return the summary prose. One re-ask on empty output
- * (transient HTTP errors are already retried inside the Gloo client). Throws
- * when both attempts come back empty — the caller (src/lib/digest.ts) treats
- * that as a generation failure and posts neither summary nor digest, so a bad
- * generation is invisible rather than half-formed.
+ * Token budget for one summary. Far larger than 5 sentences of prose need,
+ * because Gloo routes to reasoning models (gemini-2.5-flash among them) whose
+ * THINKING tokens are spent from this same budget: at 320 the thinking consumed
+ * nearly all of it and the summary came back as "Psalm 1 vividly contrasts two
+ * ways of life, inviting us" — a fragment, stored as if it were a summary.
+ */
+const MAX_TOKENS = 900;
+
+/**
+ * Run the Gloo call and return the summary prose. One re-ask when the answer is
+ * empty or was CUT OFF by the token budget (transient HTTP errors are already
+ * retried inside the Gloo client), the second attempt with a doubled budget.
+ * Throws when both attempts fail — the caller (src/lib/digest.ts) treats that as
+ * a generation failure and posts neither summary nor digest, so a bad generation
+ * is invisible rather than half-formed.
  */
 export async function generateSummary(
   input: SummaryInput,
@@ -93,15 +103,19 @@ export async function generateSummary(
           content:
             buildUserMessage(input) +
             (lastError
-              ? "\n\nYour previous answer was empty. Return the summary prose."
+              ? `\n\nYour previous answer was unusable (${lastError}). Return the complete summary prose, 3 to 5 sentences.`
               : ""),
         },
       ],
-      maxTokens: 320,
+      maxTokens: MAX_TOKENS * attempt,
     });
     const summary = asText(completion.content);
-    if (summary) return { summary, model: completion.model };
-    lastError = "empty summary";
+    // A truncated answer is neither empty nor malformed — without this check it
+    // would be stored mid-sentence and shown on the digest card.
+    if (summary && !completion.truncated) {
+      return { summary, model: completion.model };
+    }
+    lastError = completion.truncated ? "cut off mid-sentence" : "empty summary";
   }
   throw new Error(`Summary returned an unusable summary: ${lastError}`);
 }

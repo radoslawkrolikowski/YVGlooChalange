@@ -745,6 +745,12 @@ export const digests = pgTable(
      * and its summary are written together, so a posted digest never has a null
      * summary. Rendered as a collapsible card inside the digest in the thread. */
     summary: text("summary"),
+    /** Source attribution for the commentary grounding the Context agent
+     * supplied (Step 33), e.g. "Historical context from Treasury of David,
+     * public domain" — built from the retrieved chunks' own item_title. Null
+     * when the corpus does not cover the passage, which is also the signal the
+     * digest card uses to omit its footer line entirely. */
+    sourceAttribution: text("source_attribution"),
     /** Language it was generated in — Round writes directly, never translated. */
     language: text("language").notNull(),
     /** Model that served the generation, as reported by Gloo. */

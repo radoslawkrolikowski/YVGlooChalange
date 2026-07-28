@@ -109,7 +109,7 @@ export async function generatePrayer(
   const completion = await chatCompletion({
     agentName: "prayer",
     messages: buildPrayerMessages(input),
-    maxTokens: 500,
+    maxTokens: 1200,
   });
   return { text: completion.content.trim(), model: completion.model };
 }

@@ -111,7 +111,7 @@ export function shellAgent<Input>(
           { role: "system", content: definition.systemPrompt },
           { role: "user", content: definition.buildUserMessage(input) },
         ],
-        maxTokens: definition.maxTokens ?? 400,
+        maxTokens: definition.maxTokens ?? 900,
       });
       return {
         status: "ok",

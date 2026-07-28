@@ -60,6 +60,8 @@ const SYSTEM_PROMPT =
   "Use the exact member names given to you, never invented ones; " +
   "(3) question — one open discussion question grounded in the specific passage AND the circle's own words, inviting replies. " +
   "Never compare members, never rank them, never mention who did or did not reflect, never quiz on facts. " +
+  "You are sometimes given commentary grounding — background on the passage from a Bible commentary. " +
+  "Use it to make the synthesis and question more accurate and concrete about the passage; never quote it, never cite it, and never let it displace what the members actually said. " +
   "Write every part directly in the requested language. " +
   "Respond with JSON only — no prose, no markdown fences.";
 
@@ -76,7 +78,11 @@ function buildUserMessage(input: FacilitatorInput): string {
   ];
 
   if (input.contextGrounding) {
-    lines.push("Commentary grounding:", input.contextGrounding, "");
+    lines.push(
+      "Commentary grounding (background on this passage — inform the digest with it, do not quote it):",
+      input.contextGrounding,
+      "",
+    );
   }
 
   lines.push(
@@ -147,10 +153,19 @@ function asDigest(raw: unknown): FacilitatorOutput {
 }
 
 /**
- * Run the Gloo call and shape its output. One re-ask on malformed JSON (the
- * parse failure fed back); transient HTTP errors are already retried inside the
- * Gloo client. Throws when both attempts fail — the caller then posts nothing,
- * so a bad generation is invisible rather than ugly.
+ * Token budget for one digest. Sized well above the JSON's own length because
+ * Gloo routes to reasoning models whose thinking tokens are spent from this
+ * same budget — too small a budget returns JSON cut mid-string, which fails the
+ * parse below and costs a whole second call to discover.
+ */
+const MAX_TOKENS = 900;
+
+/**
+ * Run the Gloo call and shape its output. One re-ask on malformed JSON or on an
+ * answer cut off by the token budget (the failure fed back, and the retry given
+ * a doubled budget); transient HTTP errors are already retried inside the Gloo
+ * client. Throws when both attempts fail — the caller then posts nothing, so a
+ * bad generation is invisible rather than ugly.
  */
 export async function generateDigest(
   input: FacilitatorInput,
@@ -170,8 +185,12 @@ export async function generateDigest(
               : ""),
         },
       ],
-      maxTokens: 500,
+      maxTokens: MAX_TOKENS * attempt,
     });
+    if (completion.truncated) {
+      lastError = "the answer was cut off before the JSON was complete";
+      continue;
+    }
     try {
       return {
         digest: asDigest(parseJson(completion.content)),

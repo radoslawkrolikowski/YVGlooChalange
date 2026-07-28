@@ -124,7 +124,7 @@ export async function generatePreReadingPrompts(
               : ""),
         },
       ],
-      maxTokens: 400,
+      maxTokens: 900,
     });
     try {
       return { prompts: asPrompts(parseJson(completion.content)), model: completion.model };

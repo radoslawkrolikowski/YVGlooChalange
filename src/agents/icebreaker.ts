@@ -140,7 +140,7 @@ export async function generateIcebreaker(
               : ""),
         },
       ],
-      maxTokens: 350,
+      maxTokens: 800,
     });
     try {
       return { message: asMessage(parseJson(completion.content)), model: completion.model };

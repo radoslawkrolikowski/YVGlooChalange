@@ -25,14 +25,33 @@ import type { GlooSearchChunk } from "@/lib/gloo";
  * day maps to its chapter's file.
  */
 export function corpusFileForPassage(label: string): string | null {
+  const chapter = psalmChapter(label);
+  if (chapter === null) return null;
+  return `psalm-${String(chapter).padStart(3, "0")}.md`;
+}
+
+/**
+ * The chapter-level name of the passage ("Psalm 139" for "Psalm 139:1–18"), or
+ * null when the corpus cannot cover it.
+ *
+ * This is what a search `query` should name: the corpus files one item per
+ * chapter, so the verse span narrows nothing and only skews the embedding. The
+ * USFM reference is never used here — `PSA.139` matches no chunk text.
+ */
+export function corpusChapterLabel(label: string): string | null {
+  const chapter = psalmChapter(label);
+  return chapter === null ? null : `Psalm ${chapter}`;
+}
+
+/** The Psalm number a plan-day label names, ignoring any verse span. */
+function psalmChapter(label: string): number | null {
   // "Psalm 23", "Psalms 23", "Psalm 139:1-18", "Psalm 139:1–18" (en dash)
   const match = label.trim().match(/^psalms?\s+(\d{1,3})\b/i);
   if (!match) return null;
 
   const chapter = Number(match[1]);
   if (chapter < 1 || chapter > 150) return null;
-
-  return `psalm-${String(chapter).padStart(3, "0")}.md`;
+  return chapter;
 }
 
 /**
