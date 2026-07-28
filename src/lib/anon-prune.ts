@@ -2,7 +2,8 @@
 //
 // Everything an Instant Access visitor creates is a row tagged with their
 // anonymous session id and nothing else: reflections and thread messages
-// (Step 30), and in-app highlights, saved prayers and notifications (Step 30A).
+// (Step 30), in-app highlights, saved prayers and notifications (Step 30A), and
+// prayer requests and prayer acts (Step 35A).
 // Closing the browser already makes all of it unreachable — the signed token
 // that names the session lives only in sessionStorage — but "no data persisted
 // between sessions" is a promise about the database too, so it is deleted.
@@ -20,6 +21,8 @@ import {
   highlights,
   messages,
   notifications,
+  prayerActs,
+  prayerRequests,
   reflections,
   savedPrayers,
 } from "@/db/schema";
@@ -31,6 +34,8 @@ export interface AnonPruneCounts {
   highlights: number;
   savedPrayers: number;
   notifications: number;
+  prayerRequests: number;
+  prayerActs: number;
 }
 
 export function totalPruned(counts: AnonPruneCounts): number {
@@ -84,6 +89,31 @@ export async function pruneAnonSessionData(
     )
     .returning({ id: savedPrayers.id });
 
+  // Step 35A: prayer acts before prayer requests, so an anonymous act on
+  // someone else's (surviving) request is deleted on its own terms rather than
+  // only through a cascade that would never fire for it.
+  const prunedPrayerActs = await db
+    .delete(prayerActs)
+    .where(
+      and(
+        isNotNull(prayerActs.anonSessionId),
+        lt(prayerActs.prayedAt, cutoff),
+      ),
+    )
+    .returning({ id: prayerActs.id });
+
+  // An anonymous session's own requests go with it — including any acts other
+  // people left on them, which cascade from this delete.
+  const prunedPrayerRequests = await db
+    .delete(prayerRequests)
+    .where(
+      and(
+        isNotNull(prayerRequests.anonSessionId),
+        lt(prayerRequests.createdAt, cutoff),
+      ),
+    )
+    .returning({ id: prayerRequests.id });
+
   const prunedNotifications = await db
     .delete(notifications)
     .where(
@@ -100,5 +130,7 @@ export async function pruneAnonSessionData(
     highlights: prunedHighlights.length,
     savedPrayers: prunedPrayers.length,
     notifications: prunedNotifications.length,
+    prayerRequests: prunedPrayerRequests.length,
+    prayerActs: prunedPrayerActs.length,
   };
 }

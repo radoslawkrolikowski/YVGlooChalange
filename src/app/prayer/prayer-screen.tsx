@@ -10,6 +10,7 @@ import {
   TextArea,
   Toast,
 } from "@/components/ui";
+import { PrayerRequestsCard } from "./prayer-requests-card";
 import { PrayerSheet } from "./prayer-sheet";
 import type { PrayerDraft, PrayerIntent, SavedPrayer } from "./types";
 
@@ -142,6 +143,11 @@ export function PrayerScreen({
           Write this prayer
         </Button>
       </Card>
+
+      {/* Prayer requests (Step 35A) — private by default, shared per request.
+          A different object from the personal prayers above: this one the
+          circle can be asked to carry. */}
+      <PrayerRequestsCard isAnonymous={isAnonymous} hasCircle={hasCircle} />
 
       {/* Saved prayers. */}
       <Card className="flex flex-col gap-3">

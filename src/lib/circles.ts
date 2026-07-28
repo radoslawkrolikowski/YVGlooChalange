@@ -23,6 +23,11 @@ import {
   userPlanProgress,
   users,
 } from "@/db/schema";
+import {
+  loadThreadPrayerRequests,
+  type ThreadPrayerRequest,
+} from "@/lib/prayer-requests";
+import type { SessionOwner } from "@/lib/session-owner";
 
 /** Min members to flip forming → active; join is refused at MAX_MEMBERS. */
 export const MIN_MEMBERS = 2;
@@ -318,7 +323,9 @@ export interface ThreadMessage {
   /** "message" (ordinary post), "reflection" (day-tagged, Step 19),
    * "starters" (Round's conversation-starter card, Step 20), "icebreaker"
    * (Round's cold-start opening message, Step 22), "digest" (Round's daily
-   * digest card, Step 24), or "companion" (Round's stalled-day nudge, Step 24A). */
+   * digest card, Step 24), "companion" (Round's stalled-day nudge, Step 24A),
+   * "shared_prayer" (a prayer the author shared, Step 26), or "prayer_request"
+   * (a prayer request the author shared with the circle, Step 35A). */
   kind:
     | "message"
     | "reflection"
@@ -326,7 +333,8 @@ export interface ThreadMessage {
     | "icebreaker"
     | "digest"
     | "companion"
-    | "shared_prayer";
+    | "shared_prayer"
+    | "prayer_request";
   /** The plan day a reflection/starters/digest responds to; null otherwise. */
   dayNumber: number | null;
   /** Human-readable passage label for a reflection/starters/digest; else null. */
@@ -335,6 +343,11 @@ export interface ThreadMessage {
   questions: string[] | null;
   /** The structured digest on a "digest" post (Step 24); null otherwise. */
   digest: ThreadDigest | null;
+  /** The request state on a "prayer_request" post (Step 35A): the anonymous
+   * prayed count, whether THIS viewer already prayed, whether they are the
+   * author, and the answered state. Null on every other kind. Carries no
+   * identity of anyone who prayed — by design, there is no field for it. */
+  prayerRequest: ThreadPrayerRequest | null;
   /** The reader's-language translation (Step 27), when the reader's language
    * differs from this member-authored message's source and one is cached. Null
    * on system posts, same-language messages, and while a translation is still
@@ -435,6 +448,7 @@ function threadKind(kind: string): ThreadMessage["kind"] {
   if (kind === "digest") return "digest";
   if (kind === "companion") return "companion";
   if (kind === "shared_prayer") return "shared_prayer";
+  if (kind === "prayer_request") return "prayer_request";
   return "message";
 }
 
@@ -461,10 +475,17 @@ function threadKind(kind: string): ThreadMessage["kind"] {
  * (with NO "Translated by Round" label — it is a native generation); when none
  * exists the reader sees the base-language post. Member-authored posts are never
  * varianted — they go through the Translation Agent above instead.
+ *
+ * Step 35A: pass `viewer` (the requester's session owner) to attach shared
+ * prayer-request state to "prayer_request" cards — the anonymous prayed count
+ * plus the two facts that are about the viewer alone (am I the author? have I
+ * already prayed?). Omit it and the cards render read-only, which is what a
+ * server-side seed or sweep wants.
  */
 export async function loadThreadMessages(
   circleId: string,
   readerLanguage?: string | null,
+  viewer?: SessionOwner | null,
 ): Promise<ThreadMessage[]> {
   const rows = await db
     .select({
@@ -524,6 +545,15 @@ export async function loadThreadMessages(
     )
     .where(eq(messages.circleId, circleId))
     .orderBy(asc(messages.createdAt));
+
+  // Step 35A: one extra lookup, and only when the thread actually contains
+  // shared prayer requests — count + this viewer's own relationship to each.
+  const prayerRequestState = await loadThreadPrayerRequests(
+    rows
+      .filter((row) => row.kind === "prayer_request")
+      .map((row) => row.id),
+    viewer ?? null,
+  );
 
   return rows.map((row) => {
     const kind = threadKind(row.kind);
@@ -595,6 +625,10 @@ export async function loadThreadMessages(
               summary: variant?.summary ?? row.digestSummary,
               sourceAttribution: row.digestSourceAttribution,
             }
+          : null,
+      prayerRequest:
+        kind === "prayer_request"
+          ? (prayerRequestState.get(row.id) ?? null)
           : null,
       translation,
       // Expected but not yet cached → the row shows the original + a

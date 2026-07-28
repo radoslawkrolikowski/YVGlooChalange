@@ -1,11 +1,13 @@
 "use client";
 
 import {
+  Check,
   ChevronDown,
   CornerDownRight,
   HandHeart,
   Languages,
   Loader2,
+  Sparkles,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -215,6 +217,49 @@ export function CircleThread({
     }
   }
 
+  /** "I prayed" on a shared request (Step 35A): one tap, once per member.
+   * The server records the act and the refetch brings back the new count —
+   * a number only; no name of anyone who prayed exists to render. */
+  async function pray(requestId: string) {
+    setError(null);
+    try {
+      const response = await fetch(`/api/prayer/requests/${requestId}/pray`, {
+        method: "POST",
+        headers: authHeaders(true),
+        body: JSON.stringify({}),
+      });
+      const result = await response.json();
+      if (!result.ok) {
+        setError(result.error ?? "That could not be recorded.");
+        return;
+      }
+      await fetchMessages();
+    } catch {
+      setError("That could not be recorded.");
+    }
+  }
+
+  /** "Mark as answered" — offered only on the author's own request card, and
+   * refused server-side for anyone else. */
+  async function markAnswered(requestId: string) {
+    setError(null);
+    try {
+      const response = await fetch(`/api/prayer/requests/${requestId}/answer`, {
+        method: "POST",
+        headers: authHeaders(true),
+        body: JSON.stringify({}),
+      });
+      const result = await response.json();
+      if (!result.ok) {
+        setError(result.error ?? "That could not be updated.");
+        return;
+      }
+      await fetchMessages();
+    } catch {
+      setError("That could not be updated.");
+    }
+  }
+
   const inReflectionMode = mode === "reflection" && reflectionDay !== null;
 
   /** Reply to one of Round's starter questions: leave reflection mode, show
@@ -256,6 +301,8 @@ export function CircleThread({
           messages={messages}
           currentUserId={currentUserId}
           onReplyToQuestion={replyToQuestion}
+          onPray={(requestId) => void pray(requestId)}
+          onMarkAnswered={(requestId) => void markAnswered(requestId)}
         />
       )}
 
@@ -309,10 +356,16 @@ function MessageList({
   messages,
   currentUserId,
   onReplyToQuestion,
+  onPray,
+  onMarkAnswered,
 }: {
   messages: ThreadMessage[];
   currentUserId: string;
   onReplyToQuestion: (question: string) => void;
+  /** Step 35A: "I prayed" on a shared request. */
+  onPray: (requestId: string) => void;
+  /** Step 35A: the author marking their own request answered. */
+  onMarkAnswered: (requestId: string) => void;
 }) {
   let lastDayKey: string | null = null;
 
@@ -333,6 +386,12 @@ function MessageList({
               <DigestRow message={message} />
             ) : message.kind === "starters" ? (
               <StartersRow message={message} onReply={onReplyToQuestion} />
+            ) : message.kind === "prayer_request" ? (
+              <PrayerRequestRow
+                message={message}
+                onPray={onPray}
+                onMarkAnswered={onMarkAnswered}
+              />
             ) : message.kind === "shared_prayer" ? (
               <SharedPrayerRow
                 message={message}
@@ -560,6 +619,119 @@ function SharedPrayerRow({
       </div>
     </div>
   );
+}
+
+/**
+ * A shared prayer request (Step 35A): the author asked their circle to pray for
+ * something and chose, per request, to put it in front of them. Member-authored
+ * (so it translates like any message), but visually its own object — a soft
+ * accent surface with the praying-hands motif, distinct from both ordinary
+ * messages and the Step 26 shared prayer.
+ *
+ * Three rules are visible in this card:
+ *   * The response is one silent tap: "I prayed", once, then a quiet confirmed
+ *     state. Members other than the author see it; the author does not.
+ *   * The count line is anonymous — "3 people prayed for this". No names, no
+ *     avatars, no ordering, and nothing in `message.prayerRequest` that could
+ *     supply one, so "who hasn't prayed" is not derivable either.
+ *   * Only the author gets "Mark as answered"; everyone else sees the badge
+ *     once they do.
+ */
+function PrayerRequestRow({
+  message,
+  onPray,
+  onMarkAnswered,
+}: {
+  message: ThreadMessage;
+  onPray: (requestId: string) => void;
+  onMarkAnswered: (requestId: string) => void;
+}) {
+  const request = message.prayerRequest;
+  const answered = request?.status === "answered";
+  const own = request?.viewerIsAuthor ?? false;
+
+  return (
+    <div className="flex items-start gap-2.5">
+      <Avatar name={message.authorName} size="sm" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex items-baseline gap-2">
+          <span className="truncate text-sm font-semibold text-ink">
+            {own ? "You" : message.authorName}
+          </span>
+          <span
+            suppressHydrationWarning
+            className="shrink-0 text-xs text-ink-faint"
+          >
+            {formatTime(message.createdAt)}
+          </span>
+        </div>
+        <div className="rounded-lg border border-primary/25 bg-primary-light/60 px-3.5 py-3">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-primary">
+              <HandHeart size={13} aria-hidden /> Prayer request
+            </p>
+            {answered && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-success">
+                <Check size={11} aria-hidden />
+                Answered
+                {request?.answeredAt ? ` · ${formatShortDate(request.answeredAt)}` : ""}
+              </span>
+            )}
+          </div>
+
+          <TranslatedBody
+            message={message}
+            own={own}
+            className="whitespace-pre-wrap break-words font-serif text-[0.98rem] leading-relaxed text-ink"
+          />
+
+          {request && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-primary/15 pt-2.5">
+              {/* The count, anonymous by construction. */}
+              <p className="text-xs text-ink-soft">
+                {prayedCountLabel(request.prayedCount)}
+              </p>
+
+              {/* Members respond with one tap; the author never prays for
+                  their own request, so they get the answered action instead. */}
+              {!own && !answered && (
+                request.viewerHasPrayed ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
+                    <Check size={13} aria-hidden /> You prayed
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onPray(request.id)}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-ivory transition-colors hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  >
+                    <HandHeart size={13} aria-hidden /> I prayed
+                  </button>
+                )
+              )}
+
+              {own && !answered && (
+                <button
+                  type="button"
+                  onClick={() => onMarkAnswered(request.id)}
+                  className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-semibold text-primary transition-colors hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  <Sparkles size={13} aria-hidden /> Mark as answered
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** "3 people prayed for this" — a count and never a name. */
+function prayedCountLabel(count: number): string {
+  if (count === 0) return "No one has prayed for this yet.";
+  if (count === 1) return "1 person prayed for this";
+  return `${count} people prayed for this`;
 }
 
 /**
@@ -936,6 +1108,14 @@ function formatDay(iso: string): string {
     month: "long",
     day: "numeric",
     year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
+  });
+}
+
+/** Short date for the "Answered" badge, e.g. "28 Jul". */
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
   });
 }
 

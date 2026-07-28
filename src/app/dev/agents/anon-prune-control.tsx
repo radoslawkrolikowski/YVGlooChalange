@@ -22,6 +22,8 @@ const LABELS: Record<keyof AnonPruneCounts, string> = {
   highlights: "highlights",
   savedPrayers: "saved prayers",
   notifications: "notifications",
+  prayerRequests: "prayer requests",
+  prayerActs: "prayer acts",
 };
 
 export function AnonPruneControl() {

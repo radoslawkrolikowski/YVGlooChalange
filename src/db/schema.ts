@@ -944,6 +944,134 @@ export const savedPrayers = pgTable(
   ],
 );
 
+// --- Prayer requests and prayer acts (Step 35A) ---------------------------
+//
+// A prayer request is a first-class object, distinct from the Step 26 Prayer
+// tab's private personal prayer: a request is something the author may choose
+// to put in front of their circle, and something other members act on.
+//
+// Four rules from the Decisions entry shape this table:
+//
+//   * PRIVATE BY DEFAULT. `visibility` starts "private"; it becomes "circle"
+//     only through an explicit per-request share action (the same explicit
+//     per-item consent rule the brief sets for highlights). Nothing is ever
+//     auto-shared.
+//   * ESCALATION FIRST. Every request text passes the Escalation Agent before
+//     this row is written (src/lib/prayer-requests.ts) — the same pipeline
+//     position reflections have. A flagged request is stored with
+//     `flagged = true`, stays private to its author forever (the share path
+//     refuses it), and only its ID reaches escalation_audit — never its words.
+//   * AUTHOR-OWNED "ANSWERED". Only the author may move `status` to
+//     "answered"; prayer acts never change it. Answering is testimony, not
+//     task completion. ("archived" is reserved by the Decisions entry and
+//     unused in this step.)
+//   * ORIGINAL WORDS IMMUTABLE. `body` is written once. A shared request's
+//     thread card is a member-authored `messages` row (kind =
+//     "prayer_request") linked through `messageId`, so Step 27's Translation
+//     Agent covers it exactly like any member message — additively, with the
+//     original always preserved.
+//
+// Path B (Instant Access): an anonymous visitor's request carries
+// `anonSessionId` + `anonName` instead of an `authorId` (no users row, brief
+// §7), is scoped to that browser session, and is pruned on the Step 31 rail —
+// the same treatment their reflections, messages and prayers get. A request is
+// anonymous iff authorId is null.
+export const prayerRequests = pgTable(
+  "prayer_requests",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    /** The author (Path A); null on an anonymous session's request. */
+    authorId: text("author_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    /** Path B: the anonymous author's session id (scoping + prune key) and
+     * "Reader #n" name, both null for members. */
+    anonSessionId: text("anon_session_id"),
+    anonName: text("anon_name"),
+    /** The circle it was shared with; null while the request is private. */
+    circleId: text("circle_id").references(() => circles.id, {
+      onDelete: "set null",
+    }),
+    /** The author's original words, immutable — never overwritten. */
+    body: text("body").notNull(),
+    /** ISO 639-1 code of the original's language; null when unknown. */
+    sourceLanguage: text("source_language"),
+    /** "active" | "answered" | "archived" — only the author moves it. */
+    status: text("status").notNull().default("active"),
+    /** "private" (default) | "circle" (explicitly shared). */
+    visibility: text("visibility").notNull().default("private"),
+    /** True when the Escalation Agent flagged it — private forever, never
+     * shareable, and excluded from every circle-facing surface. */
+    flagged: boolean("flagged").notNull().default(false),
+    /** The thread card this request was shared as; null while private. */
+    messageId: text("message_id").references(() => messages.id, {
+      onDelete: "set null",
+    }),
+    sharedAt: timestamp("shared_at", { withTimezone: true }),
+    /** When the author marked it answered; null while active. */
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // "My requests", newest first — the Prayer tab's list, per path.
+    index("prayer_requests_author_created_idx").on(
+      table.authorId,
+      table.createdAt,
+    ),
+    index("prayer_requests_anon_created_idx").on(
+      table.anonSessionId,
+      table.createdAt,
+    ),
+    // The thread join: message → its request card state.
+    index("prayer_requests_message_idx").on(table.messageId),
+  ],
+);
+
+// One row per (request, member) — a member tapping "I prayed" once. The card
+// renders a COUNT of these and nothing else: no name, no avatar, no ordering,
+// and no identity in any API response, so "who prayed" and its inverse "who
+// hasn't" are both underivable from the product (the brief's no-comparison
+// constraint applied to prayer). The unique indexes are what make a second tap
+// from the same member a no-op rather than a second count.
+//
+// Two partial unique indexes rather than one composite key because an act has
+// exactly one owner of two possible kinds — a member (userId) or an anonymous
+// session (anonSessionId, Step 35A's Path B rule) — and a NULL in a plain
+// unique index compares as distinct, which would fence nothing.
+export const prayerActs = pgTable(
+  "prayer_acts",
+  {
+    id: serial("id").primaryKey(),
+    requestId: text("request_id")
+      .notNull()
+      .references(() => prayerRequests.id, { onDelete: "cascade" }),
+    /** The member who prayed (Path A); null on an anonymous act. */
+    userId: text("user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    /** Path B: the anonymous session that prayed — also the prune key. */
+    anonSessionId: text("anon_session_id"),
+    prayedAt: timestamp("prayed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // One act per member per request; one per anonymous session per request.
+    uniqueIndex("prayer_acts_request_user_idx")
+      .on(table.requestId, table.userId)
+      .where(sql`${table.userId} is not null`),
+    uniqueIndex("prayer_acts_request_anon_idx")
+      .on(table.requestId, table.anonSessionId)
+      .where(sql`${table.anonSessionId} is not null`),
+    // The count the card shows.
+    index("prayer_acts_request_idx").on(table.requestId),
+  ],
+);
+
 // --- In-app notifications (Step 29) ---------------------------------------
 //
 // The Reminder Agent's output surface: the bell + list in the header. Three
