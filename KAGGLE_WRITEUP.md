@@ -89,10 +89,18 @@ the prayer path.
 ### YouVersion is the only source of Bible text
 
 All Scripture goes through `src/lib/youversion.ts`. No translation is embedded,
-hardcoded, or cached as text anywhere in the repository, and **Bible text is
-never passed to Gloo**. Language is carried by the YouVersion *version ID*,
-which encodes both language and translation — so a Spanish reader gets a Spanish
-translation directly, never English translated after the fact.
+hardcoded, or cached as text anywhere in the repository. Passage text is
+routinely *given* to Gloo as grounding — that is what makes a pre-reading prompt
+or a lesson summary about the actual text rather than about the reference — but
+two things never happen:
+
+- **Gloo never produces Scripture.** Every verse a user reads was fetched from
+  YouVersion for the version they chose. No model output is ever displayed as
+  Bible text.
+- **Gloo never translates Scripture.** Language is carried by the YouVersion
+  *version ID*, which encodes both language and translation, so a Spanish reader
+  gets a Spanish translation directly. Any code path that fetched a passage in
+  one language and translated it into another would be wrong, and none exists.
 
 Used: Passages (every view), Passages again for *validation* (every AI-generated
 plan day is checked against the real API before it is saved, failures
@@ -101,9 +109,10 @@ Highlights (opt-in import), Sign In with YouVersion (OAuth 2.0 PKCE), deep links
 ("Open in Bible App" on every passage), and version copyright attribution
 rendered wherever text appears.
 
-The Translation Agent has the matching guard from the other side: it only ever
-receives user-generated circle content. Scripture is structurally out of its
-reach.
+The Translation Agent enforces the second rule from the other side: it only ever
+receives user-generated circle content, never passage text, and its prompt
+instructs it to leave Scripture references as written rather than re-translating
+or re-versing them.
 
 ---
 
