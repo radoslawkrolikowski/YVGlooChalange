@@ -69,6 +69,10 @@ export function PrayerSheet({
   const [saving, setSaving] = useState(false);
   const [sharePhase, setSharePhase] = useState<SharePhase>("idle");
   const [recastText, setRecastText] = useState("");
+  // False when Gloo refused to reword the prayer and the preview is therefore
+  // the author's own text, unchanged — said out loud below rather than passed
+  // off as Round's rewrite.
+  const [recastApplied, setRecastApplied] = useState(true);
   // A generation is tied to one open; a stale async response must not land in a
   // reopened sheet.
   const runId = useRef(0);
@@ -119,6 +123,7 @@ export function PrayerSheet({
     setSaved(false);
     setSharePhase("idle");
     setRecastText("");
+    setRecastApplied(true);
     if (intent.kind === "view") {
       runId.current++;
       setText(intent.prayer.body);
@@ -181,6 +186,7 @@ export function PrayerSheet({
         return;
       }
       setRecastText(body.text);
+      setRecastApplied(body.recast !== false);
       setSharePhase("preview");
     } catch {
       setSharePhase("idle");
@@ -258,6 +264,12 @@ export function PrayerSheet({
                 Your circle will see this
               </p>
               <PrayerText text={recastText} small />
+              {!recastApplied && (
+                <p className="text-xs text-ink-soft">
+                  Round couldn&apos;t reword this one — your circle will see it
+                  exactly as you wrote it.
+                </p>
+              )}
               <div className="flex gap-2">
                 <Button
                   full

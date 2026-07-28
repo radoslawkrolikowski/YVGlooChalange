@@ -50,14 +50,28 @@ export class GlooApiError extends Error {
 }
 
 /**
- * Gloo's content guardrail refused the request before any model saw it.
+ * Gloo refused to answer. TWO shapes produce this, both observed live:
  *
- * The response is a 200 in the normal completion shape, but it carries a
- * canned refusal as the content and NO routing metadata: `model` comes back
- * empty and the Gloo-only fields (provider, model_family, routing_mechanism,
- * trace_id) are absent — the tell that no model was routed to. Without this
- * detection a refusal reads as a perfectly good completion and lands in
- * agent_logs as "ok".
+ * SHAPE 1 — the pre-routing guardrail. A 200 in the normal completion shape
+ * carrying a canned refusal as the content and NO routing metadata: `model`
+ * comes back empty and the Gloo-only fields (provider, model_family,
+ * routing_mechanism, trace_id) are absent — the tell that no model was routed
+ * to.
+ *
+ * SHAPE 2 — a refusal written BY the routed model, after Gloo's safety layer
+ * flagged the input to it. The response is fully normal — `model` is populated
+ * (e.g. `gloo-google-gemini-2.5-flash`), usage is reported — and only the prose
+ * gives it away: "your message was flagged by an automated safety check…", "I'm
+ * unable to fulfill this specific request". Detected by
+ * `looksLikeModelRefusal()` below, because there is no structural signal to key
+ * on. Observed on a Step 26 prayer recast whose text quoted Colossians 3:5
+ * ("sexual immorality, lust, and greed") — scriptural vice language reads as
+ * toxicity to a content classifier.
+ *
+ * Without this detection a refusal reads as a perfectly good completion, lands
+ * in agent_logs as "ok", and — the reason shape 2 matters — is rendered to the
+ * user as the agent's output, and could be posted to their circle as their own
+ * words.
  *
  * It is not transient: retrying the same text is refused identically every
  * time (verified), so callers must change the request or give up rather than
@@ -70,6 +84,41 @@ export class GlooGuardrailError extends Error {
     super(`Gloo guardrail refused the request: ${refusal.slice(0, 200)}`);
     this.name = "GlooGuardrailError";
   }
+}
+
+/**
+ * Assistant-voice refusals (shape 2 above). Deliberately narrow: every entry is
+ * a phrase an assistant declining a request writes and a pastoral, devotional,
+ * or translated completion does not. Weak markers ("I can't help with that")
+ * are excluded on purpose — a member could write that sentence in a circle
+ * message and the Translation agent would then refuse to carry their words.
+ */
+const MODEL_REFUSAL_MARKERS: RegExp[] = [
+  /flagged by an automated safety check/i,
+  /\b(?:I'?m|I am) unable to (?:directly )?(?:assist|help|comply|fulfill|process)\b/i,
+  /\bunable to fulfill (?:this|that|your)(?: specific)? request\b/i,
+  /\bI cannot (?:assist|comply) with (?:this|that|your) request\b/i,
+  /\b(?:violates|goes against) (?:our|the|my) (?:content |usage )?polic(?:y|ies)\b/i,
+  /\bas an AI (?:language )?model\b/i,
+];
+
+/**
+ * How far into the content a refusal marker still counts. A refusal opens with
+ * its refusal; a 1,200-character prayer that happens to contain a matching
+ * phrase deep in its body is not one, so the window keeps false positives from
+ * ever costing a real completion.
+ */
+const REFUSAL_WINDOW_CHARS = 400;
+
+/**
+ * True when a routed model's answer is a refusal rather than the work asked of
+ * it. Exported for tests and for callers that want to explain the outcome; the
+ * client applies it to every non-streamed and streamed completion itself, so no
+ * agent has to remember to.
+ */
+export function looksLikeModelRefusal(content: string): boolean {
+  const opening = content.slice(0, REFUSAL_WINDOW_CHARS);
+  return MODEL_REFUSAL_MARKERS.some((marker) => marker.test(opening));
 }
 
 export interface GlooMessage {
@@ -307,8 +356,14 @@ async function postCompletion(
     );
   }
 
-  // A guardrail refusal: 200 and well-formed, but no model was routed to.
+  // A guardrail refusal, shape 1: 200 and well-formed, but no model was routed.
   if (!completion.model) {
+    throw new GlooGuardrailError(content);
+  }
+  // Shape 2: a model WAS routed and wrote a refusal instead of the work. Only
+  // the prose distinguishes it, so it is caught here rather than being handed
+  // back as a completion that callers would render — or post — as real output.
+  if (looksLikeModelRefusal(content)) {
     throw new GlooGuardrailError(content);
   }
 
@@ -785,8 +840,12 @@ export async function* chatCompletionStream(
       }
     }
 
-    // Same guardrail tell as the non-streamed path: content but no model routed.
-    if (!model && full) {
+    // Same guardrail tells as the non-streamed path: content but no model
+    // routed (shape 1), or a routed model that streamed a refusal (shape 2).
+    // The deltas have already reached the caller in the second case, so the
+    // route must clear what it rendered — see /api/prayer/generate, which turns
+    // a thrown guardrail into an error event rather than a finished prayer.
+    if (full && (!model || looksLikeModelRefusal(full))) {
       throw new GlooGuardrailError(full);
     }
 
