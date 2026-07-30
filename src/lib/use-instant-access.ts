@@ -20,7 +20,10 @@ export function useInstantAccess() {
       const body = await response.json();
       if (!body.ok) throw new Error(body.error ?? "Could not start a session");
       sessionStorage.setItem(ANON_TOKEN_STORAGE_KEY, body.token);
-      router.push("/home");
+      // Path B's "brief optional prompt" (brief §2): land on onboarding, which
+      // is skippable — the minted session already carries working defaults, and
+      // the only field that needs a human is the circle name.
+      router.push("/onboarding");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Something went wrong");
       setBusy(false);
