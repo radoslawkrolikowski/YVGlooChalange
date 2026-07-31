@@ -1,9 +1,8 @@
 # Round — AI-facilitated Scripture reading circles
 
-**Scripture as conversation, not broadcast. Round is the facilitation layer
-that keeps a small group reading together — what Strava is to running.**
+**Scripture as conversation, not broadcast.**
 
-| | |
+| Link | |
 |---|---|
 | **Video** | https://www.youtube.com/watch?v=YzcBW4xfzeM |
 | **Live app** | https://yv-gloo-chalange.vercel.app — tap **Instant Access**, no account |
