@@ -158,6 +158,12 @@ While rolling:
 list of things that has to match the AI clips. No room, no wall, no furniture, no
 face. **Clip 9 is the only exception**, and even there, crop to the surface.
 
+**Aspect ratio — these are shot portrait and stay portrait.** They sit inside the
+16:9 edit as pillarboxed strips with black either side, matching the demo tail's
+vertical-in-16:9 treatment. Do not try to reframe for landscape on the day; the
+conform happens in the edit. See **Part 6** for the rules, which apply to every
+practical clip without exception.
+
 ## Continuity with the AI clips
 
 - **Hands:** no rings, no watch, no bracelet, no nail polish
@@ -471,6 +477,84 @@ renders text correctly.
   reads as a patch rather than a language
 - No motion tracking. If the phone moves noticeably, reposition with two or three
   manual keyframes
+
+---
+
+# Part 6 — Conforming portrait clips into the 16:9 edit
+
+The practical clips were shot **portrait** on an iPhone; the AI clips are 16:9.
+Cropping portrait to 16:9 keeps only about **32% of the frame height**, which
+loses content on the shots where the action is spread vertically (8b's selection
+and Highlight button, 10b's banner and Share button).
+
+**The decision: keep them portrait and pillarbox — black bars either side.**
+
+This is not a fallback. The demo tail was always going to be vertical inside a
+16:9 frame with captions in the side columns, so the film already ends in this
+language. Using it for the practical clips makes the whole film coherent: **every
+time you are inside the phone, the frame narrows.** That reads as a device.
+
+## Rules for the pillarbox
+
+- **Pure black, never a blurred backdrop.** Blur is social-media grammar and
+  reads as a conform mistake. Hard black edges read as chosen — and the film
+  opens in near-darkness anyway, so black is already in the palette
+- **Identical width on every clip.** 6, 7, 8b, 9, 10b, 14, 15 — no exceptions.
+  One inconsistent frame and the audience reads all of them as errors
+- **Full height, edge to edge.** Do not scale down and float the clip with margin
+  on all four sides; that reads as apologetic. Filling the height reads as
+  confident
+- **Introduce it on clip 6**, the first practical clip and a strong beat (Ada
+  naming her). Establish the device on a moment that lands and the audience
+  accepts it before questioning it
+
+## Give every pillarboxed clip a slow push-in
+
+**What:** keyframe **Scale** from `100%` on the first frame to `103%` on the
+last. One property, two keyframes, nothing else.
+
+**Why:** the AI clips all move — clip 1 pushes in, clip 16 dollies back, most
+carry at least a drift. The practical clips are locked off; nothing moves but the
+scrolling. Cutting from a moving shot to a motionless one makes the motionless
+one read as *frozen*, and a frozen frame sends the eye wandering — where the
+first thing it finds is the black bars.
+
+2–4% is too small to perceive as movement and enough to keep the shot alive. The
+eye stays on the phone instead of going looking.
+
+## Cut on motion at every AI → practical seam
+
+**What:** land the cut while something on screen is moving, never during a still
+moment. Clip 5 ends with her hand still travelling toward the phone; clip 6
+begins with the thread **already scrolling**, not on a static screen that then
+starts to scroll.
+
+**Why:** at a cut the eye needs a moment to re-orient. If both sides are still,
+it has time to inspect the frame and notice the width changed. If it is tracking
+motion across the cut, it is busy following movement and the format change slips
+past.
+
+**This is why you recorded a second of stillness before and after every tap** —
+that stillness is **handles**, not screen time. Trim into the motion: the first
+frame of clip 6 in the timeline should be mid-scroll, with the recorded still
+second sitting unused before the cut. Same at the tail. Handles give you options;
+the edit throws most of them away.
+
+## The one clip to check individually
+
+**Clip 15.** If the "Shared ground" block ends up too small to read inside the
+narrow strip, that is a real problem — it is the single most important text in
+the film.
+
+Test it first. If it is marginal, **crop into clip 15 specifically** — a tighter
+horizontal band centred on the block — and accept that it is the one clip with
+different framing. An odd frame beats an illegible payoff.
+
+## What not to do
+
+**Do not mix treatments.** Cropping some clips and pillarboxing others gives the
+film a stutter more visible than either problem alone. One frame size, everything
+conformed to it.
 
 ---
 
