@@ -25,13 +25,13 @@ ones.
 No camera, no hands. Device screenshots, taken in the same session as the filmed
 clips, then finished in Canva and dropped over the AI footage as a static overlay.
 
-| Clip | Screenshot needed |
-|---|---|
-| 4 | Messages app — incoming text and link |
-| 11 | Circle thread — Ada's message |
-| 12 | Circle thread — Marcus's reflection |
-| 13 | Circle thread — João's message, Portuguese original |
-| 18 | Messages app — the same text, outgoing |
+| Clip | Screenshot needed | Crop |
+|---|---|---|
+| 4 | Messages app — incoming text and link | Full screen |
+| 11 | Circle thread — Ada's message | Single bubble |
+| 12 | Circle thread — Marcus's reflection | First line only |
+| 13 | Circle thread — João's message, Portuguese original | Single bubble |
+| 18 | Messages app — the same text, outgoing | Full screen |
 
 See **Part 5**.
 
@@ -471,7 +471,19 @@ renders text correctly.
 - Fixed position, offset **above or beside** the phone in the AI shot, never on
   top of the device itself
 - **Fade 6 frames in, 6 frames out**, timed to when her eyes go to the phone and
-  away from it
+  away from it. Exact timings per clip:
+
+| Clip | Length | Fade in | Fully visible | Fade out | Visible for |
+|---|---|---|---|---|---|
+| 4 | 8s | 2.0 | 2.25 → 6.0 | 6.0 | **3.75s** |
+| 11 | 4s | 0.8 | 1.05 → 3.4 | 3.4 | **2.35s** |
+| 12 | 4s | 0.8 | 1.05 → 3.4 | 3.4 | **2.35s** |
+| 13 | 4s | 0.8 | 1.05 → 3.4 | 3.4 | **2.35s** |
+| 18 | 6s | 1.5 | 1.75 → 3.5 | 3.5 | **1.75s** |
+
+  Below about two seconds of full visibility a short message cannot be read.
+  Clip 18 is deliberately shorter — the audience already read that exact message
+  in clip 4, so it only needs recognising
 - Same corner, same scale, same fade **every time**. First appearance is clip 4 —
   it sets the grammar. If the first pane a viewer sees turns up at clip 13, it
   reads as a patch rather than a language

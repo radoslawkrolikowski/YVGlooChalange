@@ -42,7 +42,7 @@ always show the true state of the shoot at a glance.
 | 9 | Paper Bible opens beside the phone | **Practical** | real | 6s | 🔲 |
 | 10a | The summary lands — relief | AI | none | 5s | 🔲 |
 | 10b | Writes a reflection, posts | **Practical** | real | 5s | 🔲 |
-| 11–13 | Replies arriving, three locations | AI | pane *(movable)* | 3s ea | 🔲 |
+| 11–13 | Replies arriving, three locations | AI | pane *(movable)* | 4s ea | 🔲 |
 | 14 | Prayer request — the anonymous count | **Practical** | real | 5s | 🔲 |
 | 15 | The digest's "Shared ground" block | **Practical** | real | 7s | 🔲 |
 | 16 | Dolly back. The room is bright | AI | none | 9s | 🔲 |
@@ -86,7 +86,7 @@ feel it completely.
 | 5 | Bus | Phone glow — first warm source in the film |
 | 6–7 | Bus | Cool, rising |
 | 8a–10b | Bedroom, next morning | Warm window light, curtains half open, climbing across the five clips |
-| 11–13 | Three locations, day | Bright, varied |
+| 11–13 | Three locations, day | Bright, varied. Clip 13 carries the first direct sun |
 | 14 | Desk or similar, day | Bright — same family as 11–13 |
 | 15 | Day, standing | Bright, cool daylight |
 | 16 | Bedroom | Brighter still, curtains full |
@@ -249,15 +249,51 @@ proofread; a legible typo is worse than an illegible AI one.
 | Clip | Style | What to design |
 |---|---|---|
 | **4** | Messages app | Incoming bubble from a contact named **Priya**, no photo. Message text: *"This one's different."* Below it, a link preview card with the Round app's title and URL. Timestamp small, above the bubble |
-| **11** | Round app UI | Thread screenshot, reply visible from **Priya** |
-| **12** | Round app UI | Thread screenshot, reply visible from **Marcus** |
-| **13** | Round app UI | Thread screenshot, reply visible from **João**, original language |
+| **11** | Round app UI | Thread, **Ada's** message. Cropped to the single bubble |
+| **12** | Round app UI | Thread, **Marcus's** reflection. Cropped to its first line |
+| **13** | Round app UI | Thread, **João's** message in the Portuguese original. Cropped to the single bubble |
 | **18** | Messages app | Outgoing bubble (right-aligned, blue/green), same text and link preview as clip 4's incoming one — she is sending on what she received. *"Delivered"* small beneath it |
 
 Clips 11–13 are three **different** screenshots, not one scrolled — each shows a
 different point in the thread so the three locations don't appear to be looking
 at an identical screen. **Clips 7 and 14 have no pane row** — both are filmed
 practically, see their own cards.
+
+### Crop the montage panes tight
+
+**Clips 4 and 18 use the full phone screen** — the link preview is part of what
+those beats are showing.
+
+**Clips 11–13 do not.** Crop each to the single message bubble. At pane scale in
+a 3–4 second clip, a full screen renders as a grey block of text-shaped noise —
+decoration rather than information. One message, large, legible is the difference
+between a viewer reading *"Ada: I keep coming back to the image of the tree…"*
+and seeing a smudge.
+
+Marcus's reflection in clip 12 is the longest of the three; crop to its opening
+line, which is where the hook is anyway.
+
+### Pane visibility timings
+
+The pane fades in when her eyes go to the phone and out before the clip ends. Six
+frames each way. **Full visibility is what matters** — below about two seconds a
+short message cannot be read.
+
+| Clip | Length | Fade in | Fully visible | Fade out | Visible for |
+|---|---|---|---|---|---|
+| **4** | 8s | 2.0 | 2.25 → 6.0 | 6.0 | **3.75s** |
+| **11** | 4s | 0.8 | 1.05 → 3.4 | 3.4 | **2.35s** |
+| **12** | 4s | 0.8 | 1.05 → 3.4 | 3.4 | **2.35s** |
+| **13** | 4s | 0.8 | 1.05 → 3.4 | 3.4 | **2.35s** |
+| **18** | 6s | 1.5 | 1.75 → 3.5 | 3.5 | **1.75s** |
+
+**Clips 11–13 were 3s and grew to 4s for this reason.** At 3s the pane is fully
+visible for only ~1.85s, which registers *that* a message arrived but not what it
+says. The extra second per clip costs 3s across the montage and is the difference
+between the panes carrying information and being wallpaper.
+
+**Clip 18 is deliberately short at 1.75s** — the audience already read that exact
+message in clip 4. It only needs to be recognised, not read.
 
 **If you move clips 11–13 to practical too** (see the shot list note), this
 table empties out entirely — you'd film the real screen instead of designing it.
@@ -573,7 +609,7 @@ the first, it is too quiet, and the repetition is the entire beat.
 
 ## Clips 11–13 — The conversation
 
-**AI · 3s each · pane** *(movable to practical)*
+**AI · 4s each · pane** *(movable to practical)*
 
 - **Frame** — Three separate short clips: bus stop, kitchen, balcony
 - **Action** — Replies arriving. She answers from wherever she is. Quiet laugh at one of them
@@ -581,7 +617,8 @@ the first, it is too quiet, and the repetition is the entire beat.
 - **In frame** — Her and the phone, minimal environment
 - **Sound** — Music building toward its peak
 - **VO** — *"I started looking forward to it. Not the reading. The arguing about it."*
-- **Pane content** — Three separate static Canva designs, one per clip (11: Priya, 12: Marcus, 13: João), each a real Round-app screenshot edited in Canva. Different content per clip so the three locations don't appear to show the same screen
+- **Pane content** — Three separate static Canva designs, one per clip (11: Ada, 12: Marcus, 13: João in Portuguese), each a real Round-app screenshot **cropped to the single message bubble**, not the full screen. Different content per clip so the three locations don't appear to show the same screen
+- **Pane timing** — fade in at **0.8s**, fully visible **1.05 → 3.4**, fade out complete by **3.65**. That is **2.35s of full visibility**, the minimum for a short message to be read. See *Pane visibility timings* in Before you start 3
 - **Note** — Three locations cannot come out of one prompt. Three separate generations, hard cuts, fastest cutting in the film. Lock the character block hard here — three rooms in sequence is where continuity breaks show most
 
 ---
