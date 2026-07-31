@@ -35,15 +35,15 @@ always show the true state of the shoot at a glance.
 | 3 | Closes the book, sets it down | AI | none | 7s | ✅ |
 | 4 | Bus. A message and a link | AI | pane | 8s | ✅ *(plate only — pane not built)* |
 | 5 | Face lit by the screen. Onboarding | AI | glow only | 6s | 🔲 |
-| 6 | The icebreaker names her | **Practical** | real | 7s | 🔲 |
+| 6 | Ada's reply naming her, her own message above it | **Practical** | real | 7s | ✅ |
 | 7 | Translated reply, Show original | **Practical** | real | 6s | 🔲 |
 | 8a | Brighter room, she settles to read | AI | none | 4s | 🔲 |
 | 8b | Prompts, passage, highlight | **Practical** | real | 8s | 🔲 |
 | 9 | Paper Bible opens beside the phone | **Practical** | real | 6s | 🔲 |
 | 10a | The summary lands — relief | AI | none | 5s | 🔲 |
-| 10b | Writes a reflection, posts | **Practical** | real | 5s | 🔲 |
+| 10b | Types and posts a message | **Practical** | real | 5s | ✅ |
 | 11–13 | Replies arriving, three locations | AI | pane *(movable)* | 4s ea | 🔲 |
-| 14 | Prayer request — the anonymous count | **Practical** | real | 5s | 🔲 |
+| 14 | Her own prayer request — the anonymous count | **Practical** | real | 5s | ✅ |
 | 15 | The digest's "Shared ground" block | **Practical** | real | 7s | 🔲 |
 | 16 | Dolly back. The room is bright | AI | none | 9s | 🔲 |
 | 17 | Daylight still-life. No dust | AI | none | 6s | 🔲 |
@@ -64,12 +64,10 @@ Recommended.
 toggle is live state changing on tap — a static pane can only show one of the
 two text states, never the swap itself, which is the entire point of the beat.
 
-**Clip 14 is practical** — it replaced a fourth reply-arriving beat with a
-shared prayer request, framed on the anonymous count line (*"3 people prayed for
-this"*). There is no tap and no live state change in this clip, so it *could*
-run as an AI + pane shot instead; it stays practical only because a real
-screenshot of the real card is cheaper and more accurate than rebuilding it in
-Canva.
+**Clip 14 is practical** — it replaced a fourth reply-arriving beat with a prayer
+request **of her own**, framed on the anonymous count line. No tap, no live state
+change; it stays practical because a real screenshot of the real card is cheaper
+and more accurate than rebuilding it in Canva.
 
 ---
 
@@ -628,13 +626,12 @@ the first, it is too quiet, and the repetition is the entire beat.
 **PRACTICAL · 5s · real screen**
 
 - **Frame** — Over the shoulder, phone and hands, head out of frame
-- **Action** — Real app, no interaction:
-  1. (0.0–2.0) Scroll reveals a shared prayer request in the thread —
-     **"Prayer request"** label with the praying-hands icon, the author's name,
-     their words
-  2. (2.0–3.5) Scroll settles. The count line beneath is legible: *"3 people
-     prayed for this"*
-  3. (3.5–5.0) Stillness. She reads it. Hold on the count
+- **Action** — Real app, no interaction. **The request is hers**, shared to the circle:
+  1. (0.0–2.0) Scroll reveals her own prayer request — **"Prayer request"** label
+     with the praying-hands icon, her name, her words
+  2. (2.0–3.5) Scroll settles. The count line beneath is legible: *"1 person
+     prayed for this"* / *"3 people prayed for this"*
+  3. (3.5–5.0) Stillness. Hold on the count, not on her words
 - **Light** — Day, bright — same family as 11–13
 - **In frame** — Hands, phone, minimal desk
 - **Sound** — Quiet room tone
@@ -642,9 +639,13 @@ the first, it is too quiet, and the repetition is the entire beat.
 - **Note** — This clip replaced a fourth "reply arriving" beat to showcase the
   Prayer feature — one of Round's most distinctive mechanisms, and one that
   appeared nowhere else in the film. **The whole point is the count line**: a
-  request is prayed for by a number, never by a name, so nobody can see who
-  did or did not pray. Frame the scroll so that line is unmistakably legible —
-  it is the only thing in the shot doing work
+  request is prayed for by a number, never by a name. Frame the scroll so that
+  line is unmistakably legible — it is the only thing in the shot doing work.
+  **Because the request is hers, the card shows "Mark as answered", never "I
+  prayed"** — the author never sees the pray button, which is exactly the point:
+  she asked, strangers answered, and she will never learn which of them. That
+  makes this the film's one moment of weight, landing between the light montage
+  (11–13) and the digest (15)
 
 ---
 

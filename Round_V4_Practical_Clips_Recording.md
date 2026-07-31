@@ -312,19 +312,24 @@ something a person would actually write at that moment.
 
 **Light** — Day, bright.
 
-**Staged beforehand:** João's prayer request has been shared to the circle.
+**Staged beforehand:** Anna has written a prayer request and shared it with the
+circle, and at least one other session has prayed for it so the count is above
+zero.
 
 **Actions:**
-1. (0.0–2.0) Scroll reveals the shared prayer request — **"Prayer request"** label
-   with a praying-hands icon, the author's name, their words
-2. (2.0–3.5) Scroll settles. The count line beneath is legible: *"3 people prayed
-   for this"*
-3. (3.5–5.0) Stillness. Hold on the count
+1. (0.0–2.0) Scroll reveals **her own** prayer request — **"Prayer request"**
+   label with a praying-hands icon, her name, her words
+2. (2.0–3.5) Scroll settles. The count line beneath is legible: *"1 person prayed
+   for this"* / *"3 people prayed for this"*
+3. (3.5–5.0) Stillness. Hold on the count, not on her words
 
 **No tap, no interaction.** **The count line is the entire point of the shot**: a
-request is prayed for by a number, never by a name, so nobody can see who did or
-did not pray. Frame the scroll so that line is unmistakably legible — it is the
-only thing in the shot doing work.
+request is prayed for by a number, never by a name. Frame the scroll so that line
+is unmistakably legible — it is the only thing in the shot doing work.
+
+**Because the request is hers, the card shows "Mark as answered", not "I
+prayed".** The author never sees the pray button. That asymmetry *is* the beat —
+she asked, strangers answered, and she will never learn which of them.
 
 ---
 
