@@ -37,3 +37,8 @@ npm-debug.log*
 
 # Corpus
 /corpus/source/
+# Kaggle submission assets (generated images; live on the Kaggle writeup)
+docs/kaggle/
+
+# macOS
+.DS_Store
