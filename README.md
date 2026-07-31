@@ -8,7 +8,7 @@ top of reading, the same relationship Strava has to running.
 | | |
 |---|---|
 | **Live demo** | **https://yv-gloo-chalange.vercel.app** — no account needed, tap **Instant Access** |
-| **Video** | _<!-- TODO: public YouTube link -->_ |
+| **Video** | **https://www.youtube.com/watch?v=YzcBW4xfzeM** |
 | **Competition** | Scripture in New Frontiers — Gloo AI + YouVersion on Kaggle, July 2026 |
 
 Built on two APIs: the **YouVersion Platform API** (all Bible text, versions,
